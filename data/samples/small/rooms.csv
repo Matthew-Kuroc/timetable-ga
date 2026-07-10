@@ -1,0 +1,4 @@
+room_code,room_name,capacity,room_type,campus_code,available
+A101,Phòng A101,60,LY_THUYET,CS1,true
+A102,Phòng A102,55,LY_THUYET,CS1,true
+LAB201,Phòng Lab 201,40,THUC_HANH,CS1,true

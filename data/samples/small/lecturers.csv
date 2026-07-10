@@ -1,0 +1,4 @@
+lecturer_code,lecturer_name,preferred_slots,max_days_per_week,max_consecutive_sessions
+GV001,Giảng viên mẫu 1,MON_AM_01|WED_AM_01,3,2
+GV002,Giảng viên mẫu 2,TUE_AM_01|THU_PM_01,3,2
+GV003,Giảng viên mẫu 3,MON_PM_01|FRI_AM_01,3,2

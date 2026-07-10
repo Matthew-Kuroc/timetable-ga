@@ -1,0 +1,4 @@
+course_code,course_name,section_code,lecturer_code,number_of_sessions,periods_per_session,expected_students,initial_registration_limit,approved_max_students,current_registered_students,scheduling_student_count,course_type,weeks,campus_code,notes
+CT101,Nhập môn lập trình,CT101-01,GV001,2,3,50,55,,48,55,LY_THUYET,1-2,CS1,
+CT102,Cấu trúc dữ liệu,CT102-01,GV002,2,3,45,50,,42,50,LY_THUYET,1-2,CS1,
+CT103,Thực hành lập trình,CT103-01,GV003,2,3,35,40,,34,40,THUC_HANH,1-2,CS1,
