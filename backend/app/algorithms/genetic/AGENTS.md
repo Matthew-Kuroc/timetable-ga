@@ -1,1023 +1,869 @@
-# Genetic Algorithm AGENTS.md
+# Algorithm Module Agent Instructions
 
 ## 1. Scope
 
-This file defines instructions for AI coding agents modifying files under:
+This file applies to all files inside:
 
-```text
-backend/app/algorithms/genetic/
-```
+`backend/app/algorithms/`
 
-It extends:
+The repository-level `AGENTS.md` and `backend/AGENTS.md` also apply.
 
-1. `/AGENTS.md`
-2. `/backend/AGENTS.md`
+Subdirectories may contain more specific instructions. For example:
 
-All repository and backend rules remain active.
+`backend/app/algorithms/genetic/AGENTS.md`
 
-This file contains only rules specific to the timetable Genetic Algorithm.
+When instructions conflict, the closest `AGENTS.md` to the modified file takes
+precedence.
 
 ---
 
-## 2. Algorithm responsibility
+## 2. Purpose
 
-This module is responsible for generating and evaluating teaching-timetable
-candidates using a Genetic Algorithm.
+The `algorithms` package contains computational logic used to generate,
+validate, evaluate, compare, or improve teaching timetable solutions.
 
-It may contain:
+Algorithm modules must remain independent from:
 
-- Scheduling-domain input structures.
-- Gene and chromosome representations.
-- Population initialization.
-- Constraint evaluation.
-- Fitness evaluation.
-- Selection.
-- Crossover.
-- Mutation.
-- Elitism.
-- Repair mechanisms.
-- Stopping conditions.
-- Run statistics.
-- Deterministic random-number handling.
-- Algorithm-specific tests.
-
-It must not contain:
-
-- FastAPI routes.
-- HTTP request or response handling.
-- React or frontend code.
+- HTTP controllers.
+- API route handlers.
 - Authentication.
-- Direct UI formatting.
-- Spreadsheet presentation logic.
-- Uncontrolled database transactions.
-- Business workflows unrelated to timetable optimization.
+- Authorization.
+- ORM sessions.
+- Database transactions.
+- CSV file parsing.
+- Frontend components.
+- Framework-specific request or response objects.
+
+Algorithms should receive validated and normalized domain data and return
+explicit typed results.
 
 ---
 
-## 3. Sources of truth
+## 3. Current Project Model
 
-Before implementing or changing an algorithm rule, read:
+The application generates teaching timetables before students register for
+course sections.
 
-1. The assigned GitHub Issue.
-2. `docs/requirements/URS.md`.
-3. `docs/requirements/SRS.md`.
-4. Relevant algorithm-design documents.
-5. Existing constraint tests.
-6. Existing implementation and experiment results.
-7. This file.
+The approved scheduling model is:
 
-Do not derive a business constraint only from an example dataset.
+- Each course section has exactly one primary lecturer.
+- One lecturer may teach multiple course sections.
+- One lecturer may teach multiple sections of the same course.
+- One lecturer may teach different courses in the same semester.
+- Each course section has one regular meeting per week.
+- Practice classes are not split into student groups.
+- One course section does not have multiple primary lecturers.
+- Teaching assignments are determined before timetable generation.
+- Algorithms do not assign lecturers to courses.
 
-Do not treat an experimental idea as a confirmed requirement.
+The scheduling algorithm selects:
 
-When a rule is unclear, expose the ambiguity instead of hard-coding an
-assumption.
-
----
-
-## 4. Known unresolved rules
-
-The following may still require confirmation:
-
-- Which student-count field is used for room-capacity checking.
-- Whether room-capacity shortage is always a hard constraint.
-- Whether preliminary schedules may temporarily use undersized rooms.
-- Practical-class duration and room requirements.
-- Exceptional time slots such as non-standard period ranges.
-- Minimum spacing for classes that meet multiple times per week.
-- Final weights for soft constraints.
-- Whether all preferred lecturer slots have equal priority.
-- Whether evening and weekend penalties differ by course type.
-
-Implement unresolved rules through centralized configuration or policies.
-
-Do not scatter provisional values across operators or fitness functions.
-
-Every temporary rule must be:
-
-- Named clearly.
-- Documented as provisional.
-- Covered by a test.
-- Easy to replace.
-
----
-
-## 5. Design goals
-
-The algorithm should prioritize:
-
-1. Correctness.
-2. Validity under hard constraints.
-3. Testability.
-4. Reproducibility.
-5. Clarity.
-6. Measurable quality.
-7. Performance after measurement.
-
-A timetable with a better fitness score but hard-constraint violations must
-not be treated as preferable to a valid timetable.
-
-The algorithm does not need to guarantee the global optimum.
-
-It should produce a useful, explainable and measurable solution within the
-project’s practical limits.
-
----
-
-## 6. Separation from infrastructure
-
-The Genetic Algorithm should operate on normalized domain data.
-
-It should not require:
-
-- An HTTP request.
-- A FastAPI dependency.
-- An active ORM session throughout the run.
-- A browser session.
-- Frontend-specific field names.
-
-Preferred flow:
-
-```text
-Database or imported data
-        ↓
-Backend service normalizes input
-        ↓
-Algorithm receives domain input and configuration
-        ↓
-Algorithm returns structured result and metrics
-        ↓
-Backend service persists or exposes the result
-```
-
-Do not perform database queries inside fitness evaluation or genetic
-operators.
-
-Required data should be loaded and normalized before the run starts.
-
----
-
-## 7. Public algorithm interface
-
-The module should expose a small, clear interface.
-
-A conceptual interface may resemble:
-
-```python
-result = generate_timetable(
-    problem=problem,
-    config=config,
-)
-```
-
-The exact API should follow existing code.
-
-Inputs should clearly represent:
-
-- Lecturers.
-- Rooms.
-- Course sections.
-- Required sessions.
-- Time slots.
-- Availability.
-- Preferences.
-- Constraint configuration.
-- Algorithm parameters.
-- Random seed.
-
-The result should clearly represent:
-
-- Best candidate.
-- Validity.
-- Hard-constraint violations.
-- Soft-constraint penalties.
-- Fitness.
-- Number of generations.
-- Execution time.
-- Random seed.
-- Relevant convergence metrics.
-
-Do not return a raw nested list without a documented structure.
-
----
-
-## 8. Domain identifiers
-
-Use stable identifiers for:
-
-- Lecturer.
+- Teaching day.
+- Valid time slot.
 - Room.
-- Course section.
-- Time slot.
-- Session occurrence.
 
-Do not use display names as unique identifiers.
+The algorithm must not change:
 
-Examples:
-
-```text
-lecturer_code
-room_code
-section_code
-slot_code
-session_id
-```
-
-Display names may change or be duplicated.
-
-Algorithm data structures should keep identifier meaning explicit.
+- Course-section identity.
+- Course identity.
+- Primary lecturer.
+- Required session duration.
+- Required room type.
+- Scheduling student count.
 
 ---
 
-## 9. Gene representation
+## 4. Supported Course Types
 
-A gene should represent one clearly defined scheduling decision.
+Supported course-section types are:
 
-A possible conceptual gene may associate:
+- `THEORY`
+- `PRACTICE`
+- `INTEGRATED`
 
-```text
-Required class session
-        +
-Assigned time slot
-        +
-Assigned room
-```
+### Theory
 
-The final representation must be documented before relying on it.
+Theory classes normally use one three-period session.
 
-Each gene must preserve enough information to identify:
+Configured theory slots may include:
 
-- The course section.
-- The required session occurrence.
-- The lecturer.
-- The assigned time slot.
-- The assigned room.
-- Relevant week pattern if applicable.
+- Periods 1–3.
+- Periods 4–6.
+- Periods 7–9.
+- Periods 10–12.
+- Periods 13–15.
 
-Avoid duplicating data that can be safely resolved from immutable problem
-input, but do not make the representation impossible to understand or test.
+### Practice
 
----
+Practice classes use one five-period or six-period session.
 
-## 10. Chromosome invariants
+Current valid slots include:
 
-A chromosome represents one timetable candidate.
+- Periods 1–5.
+- Periods 1–6.
+- Periods 2–6.
 
-Unless requirements specify otherwise, maintain invariants such as:
+### Integrated
 
-- Every required session appears exactly once.
-- No unrelated session is introduced.
-- Session identity is not lost during crossover.
-- Session identity is not duplicated during mutation.
-- Assigned rooms and time slots reference known values.
-- Chromosome length remains consistent with required sessions.
+An integrated course section:
 
-Operators must preserve invariants or be followed by a verified repair step.
+- Combines theory and practice in one class.
+- Uses one five-period or six-period session.
+- Has one primary lecturer.
+- Is processed using practice-length time-slot rules.
+- May require a laboratory, computer room, specialized room, or normal theory
+  room.
 
-Do not rely only on fitness penalties to detect structurally corrupted
-chromosomes.
+Do not infer room requirements only from the course type.
+
+Use the explicit room requirement from normalized course-section data.
 
 ---
 
-## 11. Problem preprocessing
+## 5. Valid Teaching Days and Time Slots
 
-Precompute immutable lookup data before evaluating populations where useful.
+Monday through Sunday are valid teaching days.
 
-Examples:
+Saturday and Sunday must not receive a default penalty merely because they are
+weekends.
 
-- Valid rooms by course type.
-- Valid rooms by capacity policy.
-- Valid slots by session duration.
-- Lecturer unavailable slots.
-- Room unavailable slots.
-- Course-section-to-lecturer mapping.
-- Session identifiers.
-- Time-slot overlap relationships.
+Weekend preferences depend on each lecturer.
 
-Do not repeat expensive, deterministic lookups for every gene in every
-generation when they can be prepared once.
+Algorithms must select only from configured valid time slots.
 
-Preprocessing must not change the meaning of source data.
+Do not create arbitrary period ranges such as:
 
-Precomputed structures should be covered by tests when they affect validity.
+- Periods 3–9.
+- Periods 4–10.
+- Periods 5–8.
+
+A session must remain inside one valid teaching block.
+
+Morning and afternoon teaching blocks must remain separated.
+
+Overlap checks must compare actual period ranges rather than only comparing
+time-slot codes.
+
+Two ranges overlap when:
+
+    start_a <= end_b
+    and
+    start_b <= end_a
+
+For example, periods 1–5 overlap periods 2–6 even though their slot codes are
+different.
 
 ---
 
-## 12. Hard constraints
+## 6. Algorithm Architecture
+
+Keep algorithm responsibilities separated.
+
+Recommended concepts include:
+
+- Input validation.
+- Domain preprocessing.
+- Feasible-domain generation.
+- Timetable candidate representation.
+- Hard-constraint validation.
+- Soft-constraint evaluation.
+- Search or optimization strategy.
+- Repair logic.
+- Result comparison.
+- Diagnostic reporting.
+- Progress reporting.
+
+Do not create one large function that:
+
+- Reads files.
+- Queries the database.
+- Runs the algorithm.
+- Saves results.
+- Formats API responses.
+
+A preferred flow is:
+
+    validated domain data
+            ↓
+    algorithm input adapter
+            ↓
+    preprocessing
+            ↓
+    algorithm execution
+            ↓
+    typed algorithm result
+            ↓
+    application service persists or returns result
+
+---
+
+## 7. Input Contracts
+
+Algorithm modules must receive normalized domain objects.
+
+Do not accept raw CSV rows inside core algorithm functions.
+
+A general scheduling input may contain:
+
+- Course sections.
+- Teaching assignments.
+- Lecturers.
+- Lecturer preferences.
+- Confirmed lecturer restrictions.
+- Rooms.
+- Room availability.
+- Valid time slots.
+- Academic-term information.
+- Algorithm configuration.
+
+Use explicit types or dataclasses.
+
+Example concept:
+
+    AlgorithmInput(
+        course_sections=...,
+        lecturers=...,
+        rooms=...,
+        time_slots=...,
+        lecturer_preferences=...,
+        lecturer_restrictions=...,
+        room_unavailability=...,
+        configuration=...,
+    )
+
+Do not make algorithm code depend on:
+
+- CSV column names.
+- Vietnamese display labels.
+- ORM entities with lazy-loading behavior.
+- Database identifiers that have not been validated.
+- HTTP request schemas.
+
+Convert application-layer data into stable algorithm-domain objects before
+execution.
+
+---
+
+## 8. Output Contracts
+
+Algorithm output must be explicit and explainable.
+
+A result should include, when relevant:
+
+- Execution status.
+- Best timetable candidate.
+- Hard-constraint violation count.
+- Hard-constraint violation details.
+- Soft-constraint cost.
+- Soft-cost breakdown.
+- Execution time.
+- Number of iterations or generations.
+- Stop reason.
+- Random seed.
+- Progress or history data.
+- Diagnostics.
+
+Do not return only one unexplained numeric fitness value.
+
+Example concept:
+
+    AlgorithmResult(
+        status="COMPLETED",
+        best_candidate=...,
+        hard_violation_count=0,
+        soft_cost=125.0,
+        soft_breakdown={
+            "lecturer_preferences": 25.0,
+            "room_waste": 60.0,
+            "schedule_gaps": 40.0,
+        },
+        execution_time_seconds=12.4,
+        stop_reason="MAX_GENERATIONS",
+        diagnostics=[],
+    )
+
+Application services are responsible for converting algorithm results into API
+responses or database records.
+
+---
+
+## 9. Hard Constraints
 
 Hard constraints determine whether a timetable is valid.
 
-At minimum, evaluate the confirmed forms of:
+At minimum, shared scheduling validation must cover:
 
-### HC-01 — Lecturer conflict
+- A lecturer must not teach overlapping classes.
+- A room must not host overlapping classes.
+- Every course section must receive its required base assignment.
+- The selected time slot must be configured and active.
+- The time slot must support the course type and session duration.
+- The room type must satisfy the course-section requirement.
+- Room capacity must be sufficient.
+- The room must be available.
+- Confirmed mandatory lecturer restrictions must not be violated.
+- Required assignment information must not be missing.
+- A manual schedule change must not create a new hard conflict.
+- Contradictory schedule segments must not apply to the same occurrence.
 
-A lecturer must not teach two overlapping sessions at the same time.
+Do not silently accept a hard-constraint violation.
 
-### HC-02 — Room conflict
+Do not convert a hard constraint into a soft constraint merely to obtain a
+result.
 
-A room must not host two overlapping sessions at the same time.
+Hard-constraint diagnostics should include:
 
-### HC-03 — Required session count
-
-Each course section must receive exactly its required number of sessions.
-
-### HC-04 — Room type
-
-The assigned room type must satisfy the course-section requirement.
-
-### HC-05 — Room capacity
-
-The assigned room must satisfy the confirmed capacity policy.
-
-The capacity policy is not final until the related business question is
-resolved.
-
-### HC-06 — Lecturer availability
-
-A lecturer must not be assigned to a confirmed unavailable slot.
-
-### HC-07 — Room availability
-
-A room must not be assigned during an unavailable slot.
-
-### HC-08 — Valid time slot
-
-A session must use an active time slot compatible with its required duration.
-
-### HC-09 — Valid references
-
-Every gene must reference known domain entities.
-
-Additional hard constraints may be added only when supported by requirements.
+- Constraint code.
+- Course-section code.
+- Lecturer code, when relevant.
+- Room code, when relevant.
+- Day and time slot.
+- Human-readable reason.
 
 ---
 
-## 13. Hard-constraint evaluation
+## 10. Soft Constraints
 
-Hard-constraint evaluation must be available independently of total fitness.
+Soft constraints measure timetable quality but do not make a timetable
+invalid.
 
-The algorithm result should expose structured violations, for example:
+Supported soft preferences may include:
 
-```python
-HardConstraintViolation(
-    code="LECTURER_TIME_CONFLICT",
-    entities=("GV001", "SECTION01", "SECTION02"),
-    slot_code="MON_AM_01",
-    message="Lecturer GV001 is assigned to overlapping sessions.",
-)
-```
+- Lecturer preferred teaching days.
+- Lecturer preferred time slots.
+- Lecturer undesired days.
+- Lecturer undesired time slots.
+- Reducing long gaps between sessions.
+- Reducing unnecessarily scattered teaching days.
+- Preferring compact lecturer schedules.
+- Balancing teaching distribution.
+- Reducing room-capacity waste.
+- Preserving large rooms for large classes when standard rooms are available.
+- Maintaining stable regular schedules.
 
-The exact class is implementation-dependent.
+Do not automatically penalize:
 
-Each violation should ideally provide:
+- Saturday.
+- Sunday.
+- Consecutive valid sessions.
+- Movement between university buildings.
 
-- Machine-readable code.
-- Affected entities.
-- Relevant time slot or assignment.
-- Human-readable explanation.
-- Count or severity if applicable.
+Lecturer weekend preferences must come from input data.
 
-Do not return only:
+Soft-constraint weights must be configurable.
 
-```python
-is_valid = False
-```
-
-without diagnostic information.
-
-A candidate is valid only when the authoritative hard-constraint violation
-count is zero.
+Each soft-constraint evaluator should be independently testable.
 
 ---
 
-## 14. Soft constraints
+## 11. Room Rules
 
-Soft constraints improve timetable quality without determining basic
-validity.
+Every room has its own:
 
-Potential soft constraints include:
+- Room code.
+- Room type.
+- Capacity.
+- Availability status.
+- Optional unavailable dates or time slots.
 
-- Lecturer preferred slots.
-- Maximum desired teaching days.
-- Maximum desired consecutive sessions.
-- Fewer gaps between a lecturer’s sessions.
-- Balanced teaching distribution across the week.
-- Reduced evening assignments.
-- Reduced Saturday or Sunday assignments.
-- Better room-size utilization.
-- Fewer unnecessary room changes.
-- Better spacing between repeated weekly sessions.
+A room is locally compatible with a course section when:
 
-Only confirmed or explicitly experimental soft constraints may be used.
+- Its type satisfies the required room type.
+- Its capacity is sufficient.
+- It is active.
+- It is available for the relevant time.
 
-Each soft constraint must have:
+Room capacity is a hard constraint:
 
-- A stable identifier.
-- A documented calculation.
-- A centralized weight.
-- Unit tests.
-- Metrics that can be inspected independently.
+    room.capacity >= section.scheduling_student_count
 
-Do not hide all soft penalties inside one unexplained number.
+The normalized scheduling student count should already be determined before
+entering the algorithm module.
 
----
+The business priority is:
 
-## 15. Fitness structure
+1. Approved maximum student count.
+2. Initial registration limit.
+3. Expected student count.
 
-Keep hard and soft evaluation separate.
+Algorithms should normally receive the final field:
 
-A conceptual structure may be:
+`scheduling_student_count`
 
-```text
-hard_violation_count
-hard_penalty
-soft_penalty
-fitness
-```
-
-One possible model is:
-
-```text
-fitness = base_score - hard_penalty - soft_penalty
-```
-
-The actual formula must be documented and tested.
-
-Requirements:
-
-- Hard violations must dominate soft improvements.
-- A soft preference must never compensate for a hard violation.
-- Fitness direction must be consistent: clearly maximize or clearly minimize.
-- No unexplained magic constants.
-- Weights must be centralized.
-- Individual penalty components should be inspectable.
-
-Prefer returning a breakdown such as:
-
-```python
-FitnessResult(
-    total=...,
-    hard_penalty=...,
-    soft_penalty=...,
-    components={
-        "lecturer_conflict": ...,
-        "room_conflict": ...,
-        "lecturer_preference": ...,
-    },
-)
-```
-
-The exact implementation should fit existing conventions.
+Do not repeatedly recalculate this business rule in separate algorithms.
 
 ---
 
-## 16. Configuration
+## 12. Large Rooms
 
-Algorithm configuration may include:
+Some standard rooms contain approximately 60 students.
+
+Some large halls may contain approximately 130 students.
+
+Large halls:
+
+- Are not restricted to general-education courses.
+- May be used by any compatible course section.
+- May be used when standard rooms are unavailable.
+- May be selected manually by the Training Office.
+
+Using a large hall for a small class remains valid.
+
+It may receive a configurable soft penalty.
+
+Example measurement:
+
+    unused_capacity = room.capacity - scheduling_student_count
+
+A room that is too small is a hard violation.
+
+A room that is much larger than necessary is only a soft-quality concern.
+
+Do not make the large-room penalty so strong that the algorithm refuses to use
+an otherwise valid available room.
+
+---
+
+## 13. Lecturer Restrictions and Preferences
+
+Do not assume that every lecturer preference is a mandatory unavailable slot.
+
+Before course registration, unexpected future absences are generally unknown.
+
+A lecturer condition is a hard restriction only when the input explicitly
+marks it as:
+
+- Confirmed.
+- Fixed.
+- Mandatory.
+
+Other lecturer preferences should remain soft.
+
+Examples of soft data:
+
+- Preferred day.
+- Preferred time slot.
+- Undesired day.
+- Undesired time slot.
+- Preference for fewer teaching days.
+- Preference for consecutive sessions.
+- Preference for fewer timetable gaps.
+
+When an input file contains a field such as `mandatory`, interpret it
+explicitly.
+
+Do not treat every row in `lecturer_unavailable_slots.csv` as hard without
+checking the row's mandatory status.
+
+---
+
+## 14. Academic Calendar
+
+The main scheduling algorithm creates a base weekly timetable.
+
+A separate calendar-expansion service may convert base schedules into dated
+session occurrences.
+
+The academic calendar may contain:
+
+- Semester start date.
+- Semester end date.
+- Academic week number.
+- Teaching dates.
+- Holidays.
+- Non-teaching dates.
+
+When a regular occurrence falls on a holiday:
+
+- Do not create a normal dated session.
+- Do not automatically move the session.
+- Do not automatically mark it as suspended.
+- Record that the course section may require a makeup session.
+
+Manual makeup-session scheduling occurs outside the core optimization
+algorithm.
+
+Do not put holiday movement logic inside generic selection, crossover,
+mutation, or scoring functions.
+
+---
+
+## 15. Schedule Segments
+
+A course section may use different rooms or schedules during different date
+ranges.
+
+For example:
+
+    Semester start–15/10:
+    Monday, periods 1–3, room A303
+
+    16/10–semester end:
+    Monday, periods 1–3, room F201
+
+For the MVP:
+
+- The optimization algorithm creates one base weekly assignment.
+- The Training Office may create date-range segments manually afterward.
+- Algorithms do not need to generate multiple room segments automatically.
+
+Shared validation utilities may be reused to validate:
+
+- One-session edits.
+- Date-range edits.
+- Changes from one date to the end of the semester.
+- Entire-course changes.
+
+Segment persistence and request approval belong to application services, not
+algorithm modules.
+
+---
+
+## 16. Pure Functions and Side Effects
+
+Prefer pure functions for:
+
+- Period-overlap checking.
+- Room compatibility.
+- Capacity checking.
+- Lecturer-conflict detection.
+- Room-conflict detection.
+- Soft-cost calculation.
+- Candidate comparison.
+- Feasible-domain filtering.
+
+Pure functions should:
+
+- Produce the same output for the same input.
+- Avoid modifying their arguments.
+- Avoid database or network access.
+- Avoid global mutable state.
+- Be easy to test independently.
+
+Keep side effects at the application boundary.
+
+Algorithm functions must not:
+
+- Commit database transactions.
+- Write uploaded files.
+- Send emails.
+- Read browser sessions.
+- Modify authentication state.
+- Print large debug output.
+
+---
+
+## 17. Shared Constraint Utilities
+
+Constraint logic used by multiple algorithms should be centralized.
+
+Examples:
+
+- `period_ranges_overlap`
+- `lecturer_has_conflict`
+- `room_has_conflict`
+- `room_type_is_compatible`
+- `room_capacity_is_sufficient`
+- `time_slot_is_compatible`
+- `mandatory_restriction_is_satisfied`
+
+Do not maintain separate inconsistent versions of overlap logic in:
+
+- Genetic Algorithm evaluation.
+- Manual schedule validation.
+- Schedule-segment validation.
+- Request approval.
+
+Where practical, reuse one domain-level validation service.
+
+Algorithm-specific scoring may wrap shared validation but must not redefine the
+business rule differently.
+
+---
+
+## 18. Determinism and Randomness
+
+Algorithms using randomness must accept an injected or locally controlled
+random generator.
+
+Do not use uncontrolled global randomness across many functions.
+
+Record the random seed with each run.
+
+Fixed input, fixed configuration, fixed seed, and fixed code should produce
+reproducible or meaningfully equivalent results.
+
+Tests involving randomness must use fixed seeds.
+
+Do not depend on execution order of unordered collections for reproducibility.
+
+Use stable sorting or stable identifiers where necessary.
+
+---
+
+## 19. Configuration
+
+Algorithm configuration must be explicit and validated.
+
+Examples include:
 
 - Population size.
 - Number of generations.
 - Crossover rate.
 - Mutation rate.
-- Elitism count or rate.
-- Selection method.
-- Tournament size if applicable.
+- Time limit.
 - Random seed.
 - Stagnation limit.
-- Time limit.
+- Repair-attempt limit.
 - Soft-constraint weights.
-- Repair settings.
 
-Validate configuration before starting.
+Reject invalid configuration before execution.
 
-Examples of invalid input:
+Examples:
 
-- Population size below the algorithm minimum.
-- Negative generations.
-- Rates outside `[0, 1]`.
-- Elitism larger than population.
-- Invalid selection method.
+- Population size less than one.
+- Negative generation count.
+- Mutation rate outside 0–1.
+- Crossover rate outside 0–1.
 - Negative constraint weight.
-- Empty scheduling problem.
+- Empty required input.
 
-Do not silently correct invalid configuration without reporting it.
+Do not hide configuration constants throughout implementation files.
 
-Default values must be centralized and documented.
-
----
-
-## 17. Population initialization
-
-Initialization should produce diverse candidates while respecting structural
-invariants.
-
-Where practical, prefer assigning genes from known compatible options:
-
-- Valid time slots.
-- Compatible room types.
-- Available rooms.
-- Plausible room capacities.
-
-Do not guarantee validity unless the initializer actually checks all hard
-constraints.
-
-A partially constraint-aware initializer may reduce search time, but its
-behavior must be clear.
-
-Initialization must:
-
-- Use the supplied random generator.
-- Avoid hidden global randomness.
-- Preserve every required session.
-- Fail clearly when a session has no possible assignment.
-
-Do not enter an endless retry loop when no feasible assignment exists.
+Use a typed configuration object.
 
 ---
 
-## 18. Selection
+## 20. Failure Handling
 
-Selection must be implemented as an explicit strategy.
-
-Possible strategies include:
-
-- Tournament selection.
-- Rank selection.
-- Roulette-wheel selection where fitness conditions make it safe.
-
-Do not assume roulette-wheel selection works correctly with negative or
-unbounded fitness values.
-
-Selection tests should check:
-
-- Correct output count.
-- Valid candidate references.
-- Behavior with equal fitness.
-- Behavior with minimal populations.
-- Deterministic behavior with a fixed seed where applicable.
-
-Do not mutate selected parents accidentally.
-
----
-
-## 19. Crossover
-
-Crossover must preserve session identity.
-
-The operator must not:
-
-- Drop a required session.
-- Duplicate a required session.
-- Introduce unknown session identifiers.
-- Modify parents in place unless the design explicitly requires and documents
-  it.
-
-Potential strategies must be evaluated against the chromosome representation.
-
-After crossover:
-
-- Verify structural invariants.
-- Repair only when a defined repair strategy exists.
-- Preserve deterministic behavior with a fixed random seed.
-
-Tests should cover:
-
-- Crossover rate zero.
-- Crossover rate one.
-- Minimal chromosome size.
-- Parents with different assignments.
-- Parent immutability.
-- Child session completeness.
-
----
-
-## 20. Mutation
-
-Mutation should make a bounded scheduling change.
-
-Possible mutations include:
-
-- Change a session’s time slot.
-- Change its room.
-- Change both room and time slot.
-- Swap assignments when representation supports it.
-
-Mutation must not alter session identity.
-
-Mutation should choose from valid domain identifiers.
-
-Where practical, choose compatible values rather than arbitrary invalid
-values, but do not misrepresent a heuristic as a complete validity guarantee.
-
-Tests should cover:
-
-- Mutation rate zero.
-- Mutation rate one.
-- No valid alternative assignment.
-- Fixed-seed behavior.
-- Chromosome invariants after mutation.
-- Parent or input immutability where expected.
-
----
-
-## 21. Elitism
-
-Elitism may preserve top candidates between generations.
-
-Requirements:
-
-- Validate elite count.
-- Avoid accidental shared mutable references.
-- Do not allow elite count to consume the entire population unless explicitly
-  intended.
-- Preserve candidate statistics consistently.
-- Document whether elites are copied or referenced.
-
-Tests should verify that the best eligible candidates survive when elitism is
-enabled.
-
----
-
-## 22. Repair mechanisms
-
-A repair mechanism may correct structural or scheduling violations.
-
-A repair step must:
-
-- Have a defined scope.
-- Be deterministic under the supplied random seed where randomness is used.
-- Never remove required sessions.
-- Never hide unresolved violations.
-- Return or expose repair outcomes.
-- Be independently testable.
-
-Do not create an unbounded repair loop.
-
-Do not silently modify a candidate without preserving traceability during
-debugging or experiments.
-
-Repair does not replace final hard-constraint validation.
-
----
-
-## 23. Randomness and reproducibility
-
-All random behavior must use an explicitly controlled random-number generator.
-
-Do not mix uncontrolled calls such as:
-
-```python
-random.random()
-numpy.random.random()
-```
-
-across the implementation without a coordinated seed strategy.
-
-Prefer passing a random generator or context to operators.
-
-Every run should record its random seed.
-
-With the same:
-
-- Input data.
-- Configuration.
-- Implementation version.
-- Random seed.
-
-the algorithm should be reproducible to the degree supported by the execution
-environment.
-
-Tests that depend on randomness must use a fixed seed.
-
----
-
-## 24. Stopping conditions
-
-Possible stopping conditions include:
-
-- Maximum generations reached.
-- Zero hard violations and acceptable quality reached.
-- No improvement for a configured number of generations.
-- Time limit reached.
-- External cancellation when later supported.
-
-Stopping conditions must be explicit and recorded in results.
-
-Do not stop only because one candidate has a high total fitness if hard
-violations remain.
-
-Prevent infinite loops by enforcing at least one finite stopping condition.
-
----
-
-## 25. Run metrics
-
-Collect metrics useful for experiments and debugging.
-
-Potential metrics:
-
-- Population size.
-- Generation count.
-- Best fitness per generation.
-- Average fitness per generation.
-- Hard-violation count per generation.
-- Soft penalty per generation.
-- Generation where the best candidate was found.
-- Execution time.
-- Random seed.
-- Crossover count.
-- Mutation count.
-- Repair count.
-- Stopping reason.
-
-Do not store excessive per-candidate data without a demonstrated need.
-
-Metrics should not change algorithm behavior.
-
----
-
-## 26. Performance rules
-
-Correctness comes before optimization.
-
-Before optimizing:
-
-1. Establish deterministic tests.
-2. Verify hard constraints.
-3. Measure execution time.
-4. Profile representative data.
-5. Identify the actual bottleneck.
-6. Optimize the measured area.
-
-Potential safe optimizations include:
-
-- Precomputed lookup maps.
-- Incremental conflict counts when proven correct.
-- Avoiding repeated immutable calculations.
-- Efficient overlap indexes.
-- Limiting unnecessary object copying.
-
-Do not introduce difficult caching that risks stale or incorrect fitness
-results without tests proving correctness.
-
-Do not query the database from the fitness loop.
-
----
-
-## 27. Immutability and side effects
-
-Prefer predictable data flow.
-
-Operators should clearly document whether they:
-
-- Return new candidates.
-- Modify candidates in place.
-- Share gene objects.
-- Copy fitness metadata.
-
-Avoid accidental mutation of:
-
-- Parent chromosomes.
-- Problem input.
-- Configuration.
-- Previously recorded best candidates.
-
-Tests should detect shared-reference errors.
-
----
-
-## 28. Failure handling
-
-Fail clearly when the scheduling problem is impossible to initialize or
-contains invalid input.
+Expected algorithm failures must return actionable information.
 
 Examples:
 
-- No active time slots.
-- A required practical class has no compatible room.
-- A course section references an unknown lecturer.
-- A required session has no possible assignment.
-- Population configuration is invalid.
+- No course sections were provided.
+- No valid time slot exists for a section.
+- No room satisfies the required type.
+- No room has enough capacity.
+- A lecturer reference is missing.
+- A room reference is missing.
+- Configuration is invalid.
+- A feasible timetable was not found within the execution limit.
 
-Do not continue with corrupted or incomplete problem data.
+Do not return only:
 
-Distinguish:
+    Algorithm failed.
 
-- Invalid input.
-- No feasible solution found within limits.
-- Internal algorithm failure.
-- Cancelled execution.
+A useful diagnostic should identify:
 
-These outcomes must not all be represented as a generic failure.
+- The affected entity.
+- The violated condition.
+- Whether the problem is input data, configuration, or search failure.
+- A possible corrective action.
+
+Unexpected technical exceptions may be logged by the application layer.
+
+Do not catch broad exceptions and silently return an empty timetable.
 
 ---
 
-## 29. Algorithm testing
+## 21. Performance
 
-Algorithm tests should use small, understandable fixtures.
+The initial target data is approximately:
 
-A human should be able to reason about expected outcomes.
+- 20 lecturers.
+- 100–200 course sections.
+- About one base assignment per course section.
+- Approximately 1,500–3,000 dated occurrences after calendar expansion.
 
-### 29.1. Domain tests
-
-Test:
-
-- Session construction.
-- Identifier uniqueness.
-- Time-slot overlap.
-- Compatible rooms.
-- Invalid references.
-
-### 29.2. Hard-constraint tests
-
-For each hard constraint, include:
-
-- Valid case.
-- Single violation.
-- Multiple violations.
-- Boundary case.
+Prepare useful indexes before repeated evaluation.
 
 Examples:
 
-- Same lecturer, different slots.
-- Same lecturer, same slot.
-- Same room, same slot.
-- Room capacity equal to required capacity.
-- Room capacity below required capacity.
-- Lecturer unavailable slot.
-- Inactive time slot.
+- Course sections by lecturer.
+- Assignments by lecturer and day.
+- Assignments by room and day.
+- Compatible rooms by room type and capacity.
+- Compatible slots by course type and duration.
+- Preferences by lecturer.
 
-Capacity tests must reflect the currently configured capacity policy and be
-updated when the business decision changes.
+Avoid repeatedly scanning all rooms, lecturers, and assignments for every small
+operation when an index can be reused safely.
 
-### 29.3. Soft-constraint tests
+Measure performance before introducing complex caching.
 
-Test each component separately.
-
-Verify:
-
-- No violation gives zero or expected penalty.
-- One violation gives the documented penalty.
-- Multiple violations aggregate correctly.
-- Weight changes affect only the intended component.
-
-### 29.4. Fitness tests
-
-Verify:
-
-- Breakdown values.
-- Total calculation.
-- Hard penalties dominate soft benefits.
-- Invalid candidates are not marked valid.
-- Fitness direction remains consistent.
-
-### 29.5. Operator tests
-
-Test selection, crossover, mutation and elitism independently.
-
-Check structural invariants after each operator.
-
-### 29.6. Reproducibility tests
-
-With a fixed seed:
-
-- Initialization should be reproducible.
-- Operators should be reproducible.
-- A small complete run should be reproducible where practical.
-
-### 29.7. Integration tests
-
-Use a small complete scheduling problem.
-
-Verify that:
-
-- The algorithm terminates.
-- The result has all required sessions.
-- The result contains known entities.
-- The final hard-constraint checker runs.
-- Metrics are present.
-- The stopping reason is recorded.
-
-Do not require an exact global optimum unless the fixture is small enough for
-that expectation to be proven.
+Correctness and explainability take priority over premature micro-optimization.
 
 ---
 
-## 30. Experiment integrity
+## 22. Progress Reporting
 
-When comparing algorithm configurations:
+Long-running algorithms may expose structured progress information.
 
-- Use the same input dataset.
-- Record each random seed.
-- Run multiple seeds where appropriate.
-- Record configuration values.
-- Record implementation version or commit.
-- Compare validity before soft quality.
-- Report execution environment when performance is discussed.
+Possible progress fields include:
 
-Do not compare one lucky run against another method and present it as a
-general conclusion.
+- Current iteration or generation.
+- Best hard-violation count.
+- Best soft cost.
+- Average cost.
+- Elapsed execution time.
+- Best candidate identifier.
+- Current status.
 
-Do not alter the dataset between configurations without documenting it.
+Do not print progress directly from core functions.
 
----
+Use:
 
-## 31. Documentation requirements
+- Callbacks.
+- Events.
+- Progress-reporting interfaces.
+- Returned history objects.
 
-When changing the chromosome, fitness or a major operator, update relevant
-documentation.
-
-Document:
-
-- Representation.
-- Invariants.
-- Fitness direction.
-- Constraint definitions.
-- Weight meanings.
-- Operator behavior.
-- Configuration defaults.
-- Metrics.
-- Known limitations.
-
-Do not let implementation and algorithm documentation describe different
-formulas.
+Do not report a fake percentage when meaningful progress cannot be calculated.
 
 ---
 
-## 32. Prohibited actions
+## 23. Testing Requirements
 
-Do not:
+Every algorithm module must include tests appropriate to its behavior.
 
-- Implement the entire GA in one large function.
-- Query the database inside fitness evaluation.
-- Depend on FastAPI objects.
-- Use hidden global random state.
-- Scatter weights as magic numbers.
-- Mark a candidate valid when hard violations remain.
-- Allow soft rewards to cancel hard violations.
-- Drop or duplicate required sessions during operators.
-- Modify parents unexpectedly.
-- Hide constraint violations after repair.
-- Add an unverified optimization that changes results.
-- claim optimality without proof.
-- claim tests passed without running them.
-- hard-code unresolved capacity rules as permanent behavior.
+Shared algorithm and constraint tests should cover:
+
+### Time conflicts
+
+- Exact time-slot overlap.
+- Partial period overlap.
+- Periods 1–5 versus periods 2–6.
+- Non-overlapping consecutive sessions.
+- Weekend schedules.
+
+### Lecturer rules
+
+- One lecturer teaching multiple non-overlapping classes.
+- One lecturer teaching multiple courses.
+- Consecutive sessions remaining valid.
+- Overlapping sessions being rejected.
+- Mandatory restrictions being hard.
+- Ordinary preferences remaining soft.
+
+### Room rules
+
+- Room-type compatibility.
+- Incompatible room type.
+- Sufficient capacity.
+- Insufficient capacity.
+- Room overlap.
+- Standard-room preference.
+- Large-room soft penalty.
+- Large room remaining valid when required.
+
+### Course types
+
+- Theory with a three-period slot.
+- Practice with a five-period slot.
+- Practice with a six-period slot.
+- Integrated class with a five-period slot.
+- Integrated class with a six-period slot.
+- Invalid slot and course-type combination.
+
+### Algorithm behavior
+
+- Valid input.
+- Empty input.
+- No feasible assignment.
+- Invalid configuration.
+- Fixed-seed reproducibility.
+- Safe cancellation.
+- Detailed diagnostics.
+- A valid result ranking above an invalid result.
+
+Use small datasets whose expected results can be verified manually.
 
 ---
 
-## 33. Genetic Algorithm Definition of Done
+## 24. Out-of-Scope Responsibilities
 
-An algorithm task is complete when applicable conditions are satisfied:
+Algorithm modules must not implement:
 
-- The requirement or experiment objective is clear.
-- Data structures and invariants are documented.
-- Hard and soft logic remain separated.
-- All required sessions are preserved.
-- Final hard-constraint validation is performed.
-- Randomness uses the configured seed strategy.
-- Relevant unit tests are added.
-- Existing deterministic tests still pass.
-- Metrics are updated when behavior changes.
-- Performance claims have measurements.
-- Documentation matches the implementation.
-- Temporary assumptions are reported.
-- No infrastructure-specific dependency has leaked into the algorithm core.
+- Student accounts.
+- Student course registration.
+- Student individual timetables.
+- Student-availability matching.
+- Automatic lecturer-to-course assignment.
+- Lecturer qualification decisions.
+- Practical-class student-group splitting.
+- Multiple primary lecturers for one course section.
+- Automatic substitute-lecturer assignment.
+- Automatic makeup-date selection.
+- Automatic schedule segmentation by date range.
+- Automatic holiday-session movement.
+- Email, SMS, or push notifications.
+- Tuition or grade processing.
+- Guaranteed globally optimal scheduling.
+- Full production integration with the university system.
+
+When a new algorithm requirement expands this scope, update the URS and SRS
+before implementation.
 
 ---
 
-## 34. Final report for algorithm changes
+## 25. Code Quality
 
-After changing Genetic Algorithm code, report:
+- Use explicit type annotations.
+- Prefer dataclasses or typed domain objects.
+- Keep public interfaces small and clear.
+- Keep evaluation functions independent and testable.
+- Avoid mutable global state.
+- Avoid deeply nested untyped dictionaries.
+- Avoid hidden business-rule constants.
+- Use stable constraint identifiers.
+- Document non-obvious algorithm decisions.
+- Remove debug prints before committing.
+- Do not suppress type-checking errors without explanation.
+- Do not duplicate validation rules.
+- Do not import framework-specific modules into core algorithm code.
 
-### Algorithm change
+Prefer readable and explainable implementations over clever but opaque code.
 
-Describe the representation, constraint, fitness or operator that changed.
+---
 
-### Invariants
+## 26. Change Discipline
 
-State which chromosome invariants were checked.
+When adding or changing an algorithm rule:
 
-### Fitness impact
+1. Review the latest URS and SRS.
+2. Confirm whether the rule is hard or soft.
+3. Update domain types when required.
+4. Update preprocessing and feasible-domain logic.
+5. Update validation or scoring.
+6. Update diagnostic messages.
+7. Update sample CSV files when affected.
+8. Add or update tests.
+9. Update algorithm documentation.
+10. Check whether old experiment results remain comparable.
 
-State how hard penalties, soft penalties or total fitness changed.
+Do not change the meaning of an existing constraint code without documenting
+the change.
 
-### Reproducibility
+Do not change the interpretation of an algorithm result silently.
 
-State the seed used for tests or experiments.
+---
 
-### Verification
+## 27. Definition of Done
 
-List:
+An algorithm change is complete when:
 
-- Tests run.
-- Dataset or fixture used.
-- Results.
-- Checks not run.
-
-### Performance
-
-Provide measurements only if performance was tested.
-
-### Assumptions
-
-List unresolved business rules or temporary configuration choices.
+- It follows the latest URS and SRS.
+- It receives normalized typed input.
+- It returns a typed explainable result.
+- It remains independent of HTTP, ORM, and CSV parsing.
+- It preserves fixed teaching assignments.
+- It uses only configured valid time slots.
+- It correctly detects partial period overlap.
+- It correctly enforces room type and capacity.
+- It treats Saturday and Sunday as valid teaching days.
+- It distinguishes hard restrictions from soft preferences.
+- It provides useful diagnostics.
+- Random behavior is reproducible with a fixed seed.
+- Relevant tests pass.
+- No hard constraint is silently relaxed.
+- Formatting, linting, and type checking pass.

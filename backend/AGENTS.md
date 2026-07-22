@@ -1,925 +1,1092 @@
-# Backend AGENTS.md
+# Genetic Algorithm Agent Instructions
 
 ## 1. Scope
 
-This file provides instructions for AI coding agents modifying files under
-`backend/`.
+This file applies to all files inside:
 
-It extends the repository-wide `/AGENTS.md`.
+`backend/app/algorithms/genetic/`
 
-Before modifying backend files, read:
+The repository-level `AGENTS.md` and `backend/AGENTS.md` also apply.
 
-1. `/AGENTS.md`
-2. This file
-3. The assigned GitHub Issue
-4. Relevant requirement and design documents
-5. Existing backend code and tests
+When instructions conflict, this file takes precedence for the Genetic
+Algorithm module.
 
-For Genetic Algorithm files, also read:
+This module is responsible only for generating and evaluating timetable
+candidates. It must remain independent from:
 
-```text
-backend/app/algorithms/genetic/AGENTS.md
-```
-
-Repository-wide rules continue to apply unless this file provides a more
-specific backend rule.
-
----
-
-## 2. Backend purpose
-
-The backend is responsible for:
-
-- Authentication and authorization.
-- CSV upload and validation.
-- Import-batch management.
-- Lecturer, room, course-section and time-slot data.
-- Genetic Algorithm configuration and execution.
-- Timetable persistence and retrieval.
-- Conflict detection.
-- Timetable adjustment requests.
-- Approval and rejection workflows.
-- CSV and Excel export.
-- Run-history and experiment metrics.
-- Backend API validation and error handling.
-
-The backend must be the authoritative location for business rules.
-
-Frontend validation may improve user experience, but it must not replace
-backend validation.
-
----
-
-## 3. Current project state
-
-The backend may still be in the initialization stage.
-
-Do not assume that the following already exist:
-
-- A FastAPI application.
-- A dependency-management file.
-- SQLAlchemy models.
-- Alembic migrations.
-- A PostgreSQL connection.
-- Authentication.
-- A test suite.
-- Ruff or another linter.
-- Docker configuration.
-- Background-task infrastructure.
-- A finalized directory structure.
-
-Inspect existing files before creating new ones.
-
-Do not generate the entire planned backend architecture during a small task.
-
----
-
-## 4. Expected technology
-
-The intended backend stack is:
-
-- Python.
-- FastAPI.
-- Pydantic.
-- SQLAlchemy.
-- Alembic.
-- PostgreSQL.
-- pandas when appropriate for tabular import processing.
-- openpyxl for Excel export when appropriate.
-- pytest for automated testing.
-
-These technologies are planned until the project configuration formally
-adopts them.
-
-Do not replace a primary technology without explicit approval.
-
-Do not add a dependency before checking whether the standard library or an
-existing dependency already solves the problem clearly.
-
----
-
-## 5. Intended backend structure
-
-The intended structure is similar to:
-
-```text
-backend/
-├── app/
-│   ├── api/
-│   │   ├── dependencies/
-│   │   └── routes/
-│   ├── algorithms/
-│   │   └── genetic/
-│   ├── core/
-│   ├── models/
-│   ├── repositories/
-│   ├── schemas/
-│   ├── services/
-│   └── main.py
-├── migrations/
-├── tests/
-├── AGENTS.md
-└── pyproject.toml
-```
-
-This is a direction, not a requirement to create every directory immediately.
-
-Create a directory only when the current Issue requires it.
-
-Avoid placeholder files and empty abstractions without a current use.
-
----
-
-## 6. Layer responsibilities
-
-### 6.1. API routes
-
-API routes should:
-
-- Receive and validate HTTP input.
-- Resolve authentication and authorization dependencies.
-- Call an application service.
-- Translate service results into HTTP responses.
-- Return appropriate status codes.
-- Avoid exposing internal exceptions.
-
-API routes should not:
-
-- Contain the Genetic Algorithm implementation.
-- Contain long database queries.
-- Repeat business rules.
-- Commit database transactions in several unrelated places.
-- Return raw database models without an intentional response schema.
-
-Keep route handlers thin.
-
-### 6.2. Schemas
-
-Pydantic schemas should represent:
-
-- Requests.
-- Responses.
-- Query parameters.
-- Import-validation errors.
-- Genetic Algorithm configuration.
-- Timetable results.
-- Adjustment requests.
-- Pagination metadata when needed.
-
-Use separate request and response schemas when their responsibilities differ.
-
-Do not expose:
-
-- Password hashes.
-- Internal secrets.
-- Sensitive audit information.
-- Database-only fields that clients do not need.
-
-### 6.3. Services
-
-Services should contain application and business logic, including:
-
-- Import workflows.
-- Validation coordination.
-- Timetable generation workflows.
-- Conflict checking.
-- Approval workflows.
-- Export coordination.
-- Transaction boundaries when appropriate.
-
-A service may coordinate repositories and domain logic.
-
-A service should not depend on React components or browser behavior.
-
-### 6.4. Repositories
-
-Repositories should be responsible for data access, such as:
-
-- Reading entities.
-- Persisting entities.
-- Filtering and pagination.
-- Query composition.
-- Database-specific operations.
-
-Repositories should not contain:
-
-- Fitness calculations.
-- Scheduling constraints.
-- Authorization policy decisions.
-- Approval-workflow decisions.
-- HTTP response construction.
-
-### 6.5. Domain and constraint logic
-
-Reusable domain rules should be independent of HTTP.
-
-The same conflict-checking logic should be reusable by:
-
-- Automatic timetable generation.
-- Manual timetable changes.
-- Adjustment-request approval.
-- Tests.
-- Final timetable validation.
-
-Do not create separate, inconsistent implementations for the same rule.
-
----
-
-## 7. Python conventions
-
-Use English for:
-
-- Module names.
-- Class names.
-- Function names.
-- Variables.
-- Enums.
-- Database identifiers.
-- API field names unless an external contract requires otherwise.
-
-User-facing messages may be Vietnamese.
-
-### 7.1. Naming
-
-Use:
-
-```python
-lecturer_code
-course_section
-validate_time_conflict
-TimetableRunService
-RoomRepository
-```
-
-Avoid:
-
-```python
-maGV
-ktraPhong
-data1
-tmp2
-xu_ly
-```
-
-### 7.2. Type hints
-
-Use type hints for:
-
-- Public functions.
-- Service methods.
-- Repository methods.
-- Domain objects.
-- Algorithm interfaces.
-- Non-obvious local structures.
-
-Do not add meaningless type annotations that make code harder to understand.
-
-### 7.3. Functions
-
-Prefer functions that:
-
-- Have one clear responsibility.
-- Use descriptive names.
-- Have limited side effects.
-- Return structured results.
-- Are independently testable.
-
-Avoid very large functions that combine:
-
-- Parsing.
-- Validation.
-- Database writes.
-- Business rules.
-- Response formatting.
-
-### 7.4. Exceptions
-
-Use specific exceptions.
-
-Avoid:
-
-```python
-try:
-    ...
-except Exception:
-    pass
-```
-
-Do not silently ignore failures.
-
-Expected domain errors should be represented deliberately, for example:
-
-- Entity not found.
-- Duplicate identifier.
-- Invalid import data.
-- Permission denied.
-- Timetable conflict.
-- Invalid state transition.
-
-Unexpected errors should be logged safely and converted to a generic client
-response.
-
-### 7.5. Mutable defaults
-
-Do not use mutable default arguments.
-
-Avoid:
-
-```python
-def validate(errors=[]):
-    ...
-```
-
-Use:
-
-```python
-def validate(errors: list[str] | None = None):
-    current_errors = [] if errors is None else errors
-```
-
----
-
-## 8. FastAPI rules
-
-### 8.1. Application construction
-
-Prefer an application factory or clearly structured application initialization
-when it improves testing and configuration.
-
-Do not put all routes and setup code into one large `main.py`.
-
-### 8.2. Dependency injection
-
-Use FastAPI dependencies for concerns such as:
-
+- HTTP frameworks.
+- API controllers.
 - Database sessions.
-- Current authenticated user.
-- Permission checking.
-- Configuration access.
-- Shared request-level dependencies.
+- Authentication.
+- Frontend code.
+- File-upload handling.
+- ORM models.
 
-Do not hide major business operations inside a dependency.
-
-### 8.3. Status codes
-
-Choose status codes based on behavior.
-
-Typical examples:
-
-- `200 OK` for successful reads or updates.
-- `201 Created` for created resources.
-- `204 No Content` for successful operations with no response body.
-- `400 Bad Request` for malformed workflows not covered by schema validation.
-- `401 Unauthorized` when authentication is missing or invalid.
-- `403 Forbidden` when the user lacks permission.
-- `404 Not Found` when a requested resource does not exist.
-- `409 Conflict` for duplicate or conflicting state.
-- `422 Unprocessable Entity` for structured validation failures.
-
-Follow the established project convention once one exists.
-
-Do not return `200 OK` for every outcome.
-
-### 8.4. API response consistency
-
-Use consistent response formats.
-
-A structured validation error may resemble:
-
-```json
-{
-  "code": "CSV_VALIDATION_FAILED",
-  "message": "Dữ liệu nhập không hợp lệ.",
-  "details": [
-    {
-      "row": 12,
-      "column": "lecturer_code",
-      "value": "GV999",
-      "code": "LECTURER_NOT_FOUND",
-      "message": "Mã giảng viên không tồn tại."
-    }
-  ]
-}
-```
-
-Do not return raw Python exception messages to clients.
+Use plain domain objects, typed data structures, and explicit input/output
+contracts.
 
 ---
 
-## 9. Authentication and authorization
+## 2. Algorithm Responsibility
 
-Authentication and authorization rules must be enforced by the backend.
+The Genetic Algorithm receives validated and normalized timetable data.
 
-Expected roles may include:
+It determines:
 
-- Training Department staff or timetable manager.
-- Lecturer.
-- Technical administrator.
+- Teaching day.
+- Valid time slot.
+- Room.
 
-Do not trust:
+It does not determine:
 
-- A role sent by the frontend.
-- A lecturer identifier sent by the client without ownership verification.
-- Hidden frontend controls as sufficient authorization.
+- Which lecturer teaches a course section.
+- Which course sections are opened.
+- Student course registration.
+- Student availability.
+- Lecturer payroll or teaching workload assignment.
+- Makeup dates based on student timetables.
+- Whether a lecturer is qualified to teach a course.
 
-### 9.1. Lecturer restrictions
-
-A lecturer must not be allowed to:
-
-- View unauthorized lecturer data.
-- Modify another lecturer’s timetable.
-- Submit requests for unrelated course sections.
-- Add or delete assigned course sections.
-- Approve their own timetable changes unless explicitly authorized.
-- Access Training Department management functions.
-
-### 9.2. Credentials
-
-Never:
-
-- Store plain-text passwords.
-- Return password hashes.
-- Log complete tokens.
-- Put authentication secrets in source code.
-- Store backend secrets in frontend configuration.
-
-Authentication implementation must be covered by tests for both allowed and
-forbidden access.
+Teaching assignments are fixed before the algorithm runs.
 
 ---
 
-## 10. Database and SQLAlchemy
+## 3. Approved Teaching-Assignment Model
 
-### 10.1. Model responsibilities
+The following rules are fixed:
 
-Database models represent persistence.
+- Each course section has exactly one primary lecturer.
+- A lecturer may teach multiple course sections.
+- A lecturer may teach multiple sections of the same course.
+- A lecturer may teach different courses in the same semester.
+- A lecturer may teach consecutive valid sessions.
+- A lecturer must not teach overlapping sessions.
+- A course section is not assigned to multiple primary lecturers.
+- Practice classes are not split into student groups.
+- The GA must not replace the assigned lecturer.
 
-Do not place large workflow logic directly inside ORM models.
+Do not interpret “one lecturer per course section” as “one course section per
+lecturer.”
 
-Simple domain invariants may be represented close to the model when this keeps
-the code clear, but application workflows belong in services.
+---
 
-### 10.2. Constraints
+## 4. Weekly Schedule Model
 
-Use database constraints where appropriate:
-
-- Primary keys.
-- Foreign keys.
-- Unique identifiers.
-- Required columns.
-- Simple check constraints.
-- Unique combinations.
-
-Application validation is still required for clear user-facing errors and
-complex rules.
-
-### 10.3. Transactions
-
-Use a transaction for operations that must succeed or fail together.
+Each course section has one regular meeting per week.
 
 Examples:
 
-- Creating an import batch and its imported rows.
-- Saving a Genetic Algorithm run and its generated timetable.
-- Approving an adjustment request and updating the timetable.
-- Applying several related schedule changes.
-- Updating status and audit information together.
+- One theory class every Monday, periods 1–3.
+- One practice class every Wednesday, periods 1–6.
+- One integrated class every Saturday, periods 2–6.
 
-Do not leave partially updated business state after an exception.
+A course section may produce approximately 15 dated occurrences during a
+semester.
 
-### 10.4. Query behavior
+For the MVP:
 
-Avoid:
+- One gene represents one course section's base weekly assignment.
+- The chromosome contains approximately one gene per course section.
+- Do not create one independent gene for every dated occurrence.
 
-- Database queries inside large loops.
-- Loading complete tables when only a subset is needed.
-- N+1 query patterns.
-- Returning unbounded result sets.
-- Duplicate queries for the same request without reason.
+Example gene concept:
 
-Do not introduce complex optimization before measuring actual behavior.
+    Gene(
+        section_code="AI-01",
+        lecturer_code="GV001",
+        day_of_week=2,
+        slot_code="LT_01_03",
+        room_code="A301",
+    )
 
-### 10.5. Sessions
+The following values are fixed input data:
 
-Database session lifecycle should be explicit and consistent.
+- `section_code`
+- `lecturer_code`
+- `course_type`
+- `required_room_type`
+- `periods_per_session`
+- `scheduling_student_count`
 
-Do not create uncontrolled global sessions.
+The following values are selected by the GA:
 
-Do not keep transactions open while executing long-running Genetic Algorithm
-work unless there is a specific documented reason.
+- `day_of_week`
+- `slot_code`
+- `room_code`
 
----
-
-## 11. Alembic migrations
-
-When Alembic is configured:
-
-- Every schema change must have a migration.
-- Review generated migrations before committing.
-- Use descriptive migration messages.
-- Do not ask team members to edit shared databases manually.
-- Do not modify a migration that has already been used by other members.
-- Create a new migration for later corrections.
-- Document destructive changes.
-
-A Pull Request with a migration must state:
-
-- What schema changed.
-- How to apply the migration.
-- Whether existing data is affected.
-- Whether rollback is safe.
-
-Do not delete a table or column without explicit approval.
+Do not mutate fixed teaching-assignment fields.
 
 ---
 
-## 12. CSV import
+## 5. Course Types
 
-### 12.1. Input safety
+Supported course types are:
 
-Treat uploaded files as untrusted input.
+- `THEORY`
+- `PRACTICE`
+- `INTEGRATED`
 
-Validate:
+### Theory
 
-- File type.
-- File size.
-- Encoding.
-- Required headers.
-- Duplicate headers.
-- Empty files.
-- Row count when relevant.
-- Required values.
-- Numeric values.
-- Enum values.
-- Referential identifiers.
-- Duplicate business identifiers.
+Theory classes normally contain three periods per session.
 
-Do not trust only the file extension or client-provided MIME type.
+Possible configured theory slots include:
 
-### 12.2. Parsing and validation separation
+- Periods 1–3.
+- Periods 4–6.
+- Periods 7–9.
+- Periods 10–12.
+- Periods 13–15.
 
-Prefer separate stages:
+### Practice
 
-```text
-Receive file
-    ↓
-Read and parse
-    ↓
-Normalize headers and values
-    ↓
-Validate structure
-    ↓
-Validate each row
-    ↓
-Validate cross-file references
-    ↓
-Produce preview and error report
-    ↓
-User confirmation
-    ↓
-Persist import batch
-```
+Practice classes contain five or six periods.
 
-Do not persist invalid rows silently unless the documented requirement
-explicitly permits partial import.
+Current valid practice slots include:
 
-### 12.3. Validation errors
+- Periods 1–5.
+- Periods 1–6.
+- Periods 2–6.
 
-Errors should include enough information for correction:
+### Integrated
 
-- Row number.
-- Column name.
-- Original value.
-- Machine-readable code.
-- Human-readable message.
+An integrated course section:
 
-Keep original row numbering understandable to users, accounting for the CSV
-header.
+- Combines theory and practice in one session.
+- Is represented as one course section.
+- Has one primary lecturer.
+- Uses five or six periods.
+- Uses the same slot-length rules as practice classes.
+- May require a laboratory or a normal theory room.
 
-### 12.4. Large files
+Do not infer the required room type only from `course_type`.
 
-Do not load arbitrarily large files without controls.
-
-When actual data size is known, choose an appropriate strategy:
-
-- Full in-memory parsing for verified small files.
-- Chunked parsing for larger files.
-- Background processing when runtime justifies it.
-
-Do not add background infrastructure before it is required.
+Use the explicit `required_room_type` supplied for the course section.
 
 ---
 
-## 13. Timetable and conflict validation
+## 6. Valid Time Slots
 
-Conflict checking must be centralized and reusable.
+The GA must select only from validated configured time slots.
 
-At minimum, relevant operations should check:
+Do not generate arbitrary values for:
 
-- Lecturer time conflicts.
-- Room time conflicts.
-- Course-section session requirements.
-- Room-type compatibility.
-- Room-capacity rules after they are confirmed.
-- Lecturer unavailable slots.
-- Room unavailable slots.
-- Active time slots.
-- Valid entity references.
+- Start period.
+- End period.
+- Session duration.
 
-Manual changes must use the same authoritative rules as automatic scheduling.
+Do not create invalid ranges such as:
 
-A successful API response must not be returned before required checks pass.
+- Periods 3–9.
+- Periods 4–10.
+- Periods 5–8.
 
-Return all useful detected conflicts where feasible instead of stopping after
-the first error, unless the operation must fail immediately.
+A session must remain inside one valid teaching block.
 
----
+Morning and afternoon sessions must remain separated.
 
-## 14. Adjustment requests
+Time-slot compatibility should be precomputed before population initialization.
 
-Expected request types may include:
+Example compatibility:
 
-- Suspend one session.
-- Move one session.
-- Change room.
-- Move an entire recurring schedule when allowed.
+    compatible_slots[section_code] = [
+        slot for slot in time_slots
+        if slot.supports(course_type, periods_per_session)
+    ]
 
-Do not finalize uncertain workflow rules without confirmation.
-
-State transitions should be explicit, such as:
-
-```text
-PENDING
-APPROVED
-REJECTED
-CANCELLED
-APPLIED
-```
-
-The exact states must follow the SRS when finalized.
-
-Invalid transitions must be rejected.
-
-When applicable, preserve audit information:
-
-- Requester.
-- Reviewer.
-- Created time.
-- Reviewed time.
-- Reason.
-- Rejection note.
-- Previous schedule.
-- Proposed schedule.
-- Applied result.
-
-Approval and schedule application should be transactionally consistent.
+Fail input validation before running the GA when a section has no compatible
+time slot.
 
 ---
 
-## 15. Genetic Algorithm integration
+## 7. Teaching Days
 
-The backend service may coordinate Genetic Algorithm execution, but the
-algorithm implementation must remain isolated from HTTP concerns.
+Monday through Sunday are valid teaching days.
 
-The backend may be responsible for:
+Saturday and Sunday must not receive an automatic penalty.
 
-- Loading normalized scheduling input.
-- Validating configuration.
-- Starting a run.
-- Recording run status.
-- Invoking the algorithm.
-- Persisting the result.
-- Exposing metrics.
-- Handling cancellation if later required.
+Weekend scheduling is normal at the university.
 
-The backend route or service must not reimplement:
+A lecturer may:
 
-- Chromosome logic.
-- Fitness rules.
-- Genetic operators.
-- Constraint evaluation.
+- Prefer weekends.
+- Prefer weekdays.
+- Have no day preference.
+- Mark a day as undesirable.
 
-Read the local algorithm instructions before modifying those components:
+Weekend penalties may only come from explicit lecturer preferences.
 
-```text
-backend/app/algorithms/genetic/AGENTS.md
-```
+Do not implement a global rule such as:
 
-Long-running execution must not hold unnecessary database transactions.
+    Saturday penalty = 10
+    Sunday penalty = 20
 
-Do not add a task queue until runtime requirements demonstrate that it is
-needed and the team approves it.
+unless this is explicitly configured as a project-wide preference.
 
 ---
 
-## 16. Export rules
+## 8. Lecturer Preferences
 
-CSV and Excel exports must:
+Lecturer preferences are soft constraints unless explicitly marked as confirmed
+fixed restrictions.
 
-- Represent the selected or effective timetable.
-- Preserve Vietnamese text correctly.
-- Use stable and documented column names.
-- Avoid exposing internal identifiers that users do not need.
-- Handle empty results.
-- Use appropriate content types and filenames.
-- Be tested against representative data.
+Supported preference concepts may include:
 
-Export formatting should be separated from database queries and route logic.
+- Preferred days.
+- Preferred time slots.
+- Undesired days.
+- Undesired time slots.
+- Preference for compact teaching days.
+- Preference for fewer long gaps.
+- Preference for consecutive sessions.
+- Preferred number of teaching days.
 
-Do not make the exported file disagree with the timetable displayed by the
-system.
+Unexpected future absences are not known during timetable generation.
 
----
+Do not treat ordinary preference data as a hard unavailable schedule.
 
-## 17. Logging
+A lecturer restriction is hard only when input data explicitly marks it as:
 
-Use structured, useful logging where configured.
+- Confirmed.
+- Fixed.
+- Mandatory.
 
-Log events such as:
+The sample field `mandatory` must be interpreted explicitly.
 
-- Import started or completed.
-- Import validation failed.
-- Genetic Algorithm run started or completed.
-- Adjustment request changed state.
-- Unexpected backend failure.
-
-Do not log:
-
-- Passwords.
-- Password hashes.
-- Full authentication tokens.
-- Secret keys.
-- Entire uploaded files.
-- Sensitive personal information without necessity.
-
-Include identifiers useful for tracing, such as:
-
-- Request ID.
-- Import-batch ID.
-- Algorithm-run ID.
-- Adjustment-request ID.
-
-Do not use `print()` as permanent application logging.
+Do not convert every entry in `lecturer_unavailable_slots.csv` into a hard
+constraint without checking that field.
 
 ---
 
-## 18. Backend testing
+## 9. Room Compatibility
 
-Use pytest once configured.
+A room assignment is valid only when:
 
-Tests should be deterministic and isolated.
+- The room is available.
+- The room is not used by another class at the same time.
+- The room type satisfies the course-section requirement.
+- Room capacity is greater than or equal to the scheduling student count.
+- The room is active during the required period.
 
-### 18.1. Unit tests
+The scheduling student count should be provided by normalized input data.
 
-Use unit tests for:
+Its business priority is:
 
-- Pure validation functions.
-- Service rules.
-- State transitions.
-- Conflict checking.
-- Export transformations.
-- Authorization-policy helpers.
-- Algorithm-independent domain logic.
+1. Approved maximum student count.
+2. Initial registration limit.
+3. Expected student count.
 
-### 18.2. API tests
+Do not duplicate this business calculation in multiple GA functions.
 
-Use API tests for:
+Prefer receiving one finalized field:
 
-- Request validation.
-- Response schemas.
-- HTTP status codes.
-- Authentication.
-- Authorization.
-- Error responses.
-- Transactional workflows.
-
-### 18.3. Database tests
-
-Database tests must:
-
-- Use an isolated test database or supported test strategy.
-- Clean up state between tests.
-- Avoid production credentials.
-- Avoid dependence on test execution order.
-- Verify transaction rollback where relevant.
-
-### 18.4. Import tests
-
-Include cases such as:
-
-- Valid CSV.
-- Empty CSV.
-- Missing required column.
-- Duplicate column.
-- Invalid encoding.
-- Missing required value.
-- Invalid numeric value.
-- Unknown lecturer.
-- Duplicate course-section code.
-- Invalid room type.
-- Multiple errors in one file.
-
-### 18.5. Authorization tests
-
-For protected endpoints, test:
-
-- Anonymous access.
-- Correct role.
-- Incorrect role.
-- Access to owned records.
-- Access to another user’s records.
-
-Do not only test successful requests.
+`scheduling_student_count`
 
 ---
 
-## 19. Backend commands
+## 10. Room Capacity
 
-Check the actual project configuration before running commands.
+Room capacity is a hard constraint.
 
-When the relevant tools are configured, expected commands may include:
+Invalid assignment:
 
-```bash
-cd backend
-pytest
-```
+    room.capacity < section.scheduling_student_count
 
-```bash
-cd backend
-ruff check .
-```
+Valid assignment:
 
-```bash
-cd backend
-ruff format --check .
-```
+    room.capacity >= section.scheduling_student_count
 
-```bash
-cd backend
-alembic upgrade head
-```
+Do not allow an infeasible room merely by applying a small soft penalty.
 
-Do not report these commands as successful unless they were actually run.
+A room that is too small makes the gene or chromosome invalid.
 
-If `pyproject.toml`, pytest, Ruff or Alembic is not yet configured, report that
-fact instead of pretending the check exists.
+The GA may either:
+
+- Prevent the assignment during initialization.
+- Repair the assignment.
+- Apply a prohibitive hard penalty.
+- Reject the individual.
+
+Prefer preventing known impossible assignments before population generation.
 
 ---
 
-## 20. Backend Definition of Done
+## 11. Large Rooms
 
-A backend task is complete when applicable conditions are satisfied:
+Some standard rooms contain approximately 60 students.
 
-- API behavior matches the Issue and requirements.
-- Request and response schemas are defined.
-- Authorization is enforced at the backend.
-- Business logic is not duplicated in routes.
-- Database changes have reviewed migrations.
-- Transactions protect multi-step updates.
-- Input and error cases are handled.
-- Relevant tests are added.
-- Tests and configured checks pass.
-- No secret or local configuration is committed.
-- Documentation is updated when contracts change.
-- Remaining assumptions are reported.
+Some large halls may contain approximately 130 students.
 
-Do not declare completion based only on a successful manual request.
+Large halls:
+
+- Are not restricted to general-education courses.
+- May contain any compatible course section.
+- May be used when standard rooms are unavailable.
+- May later be selected manually by the Training Office.
+
+Using a large hall for a small class is valid but may receive a soft penalty.
+
+Example:
+
+    unused_capacity = room.capacity - scheduling_student_count
+
+Possible soft scoring:
+
+- Small unused capacity: low or no penalty.
+- Very large unused capacity: higher penalty.
+- Negative unused capacity: hard violation.
+
+Do not make a large-room penalty so high that the algorithm prefers an
+infeasible timetable or fails to use an available room when necessary.
+
+Large-room preference weights must be configurable.
 
 ---
 
-## 21. Final report for backend changes
+## 12. Room and Lecturer Overlap
 
-After modifying backend files, report:
+Overlap detection must use actual period ranges.
 
-### Summary
+Do not compare only `slot_code`.
 
-What behavior changed.
+Example:
 
-### Files
+- Class A uses periods 1–5.
+- Class B uses periods 2–6.
 
-List created, modified and deleted files.
+These classes overlap even though the slot codes differ.
 
-### API impact
+Two period ranges overlap when:
 
-State:
+    start_a <= end_b
+    and
+    start_b <= end_a
 
-- Endpoints added or changed.
-- Request or response schema changes.
-- Status-code changes.
-- Authorization changes.
+A lecturer conflict occurs when:
 
-### Database impact
+- The lecturer is the same.
+- The day is the same.
+- The period ranges overlap.
 
-State:
+A room conflict occurs when:
 
-- Models changed.
-- Migration added.
-- Existing data impact.
+- The room is the same.
+- The day is the same.
+- The period ranges overlap.
 
-### Verification
+Use shared overlap utilities.
 
-List commands run and results.
+Do not maintain separate inconsistent overlap logic for lecturers and rooms.
 
-### Assumptions and risks
+---
 
-List unresolved requirements and unverified behavior.
+## 13. Academic Calendar
+
+The GA generates a base weekly timetable.
+
+The academic calendar is used afterward to create dated occurrences.
+
+The calendar may contain:
+
+- Semester start date.
+- Semester end date.
+- Academic week number.
+- Teaching days.
+- Holidays.
+- Non-teaching dates.
+
+When a regular occurrence falls on a holiday:
+
+- Do not create a normal session occurrence.
+- Do not automatically move it.
+- Do not mark it as suspended by the GA.
+- Record that the course section may be missing a required session.
+
+The Training Office may add a makeup session manually later.
+
+Holiday expansion belongs in a schedule-expansion or calendar service, not in
+selection, crossover, mutation, or fitness logic.
+
+The GA should optimize the regular base timetable, not automatically solve all
+makeup sessions.
+
+---
+
+## 14. Schedule Segments
+
+A course section may use different rooms during different date ranges.
+
+Example:
+
+    Semester start–15/10:
+    Monday, periods 1–3, room A303
+
+    16/10–semester end:
+    Monday, periods 1–3, room F201
+
+For the MVP:
+
+- The GA creates one base schedule for the whole course section.
+- The Training Office may manually create multiple schedule segments afterward.
+- The GA does not need to generate date-range room changes automatically.
+
+Do not add date-range segmentation into chromosome design unless the URS and
+SRS are formally changed.
+
+Manual segment validation may reuse GA constraint utilities, but segment
+persistence does not belong in the GA engine.
+
+---
+
+## 15. Hard Constraints
+
+Hard constraints determine timetable validity.
+
+At minimum, enforce:
+
+- `HC-01`: A lecturer must not teach overlapping classes.
+- `HC-02`: A room must not host overlapping classes.
+- `HC-03`: Each course section must receive one base weekly assignment.
+- `HC-04`: The selected time slot must be valid.
+- `HC-05`: The slot must support the course type and session duration.
+- `HC-06`: The room type must satisfy the course-section requirement.
+- `HC-07`: Room capacity must satisfy the scheduling student count.
+- `HC-08`: The room must be available.
+- `HC-09`: A confirmed mandatory lecturer restriction must not be violated.
+- `HC-10`: Required gene fields must not be missing.
+
+A timetable candidate with any hard violation is not considered valid.
+
+Do not silently convert a hard constraint into a soft constraint to obtain a
+result.
+
+Return hard-violation details grouped by:
+
+- Constraint code.
+- Lecturer.
+- Room.
+- Course section.
+- Day and time slot.
+- Human-readable reason.
+
+---
+
+## 16. Soft Constraints
+
+Soft constraints measure timetable quality.
+
+Possible soft constraints include:
+
+- Lecturer preferred day.
+- Lecturer preferred time slot.
+- Lecturer undesired day.
+- Lecturer undesired time slot.
+- Long gaps between sessions.
+- Excessively scattered teaching days.
+- Excessive consecutive teaching sessions, when configured.
+- Room-capacity waste.
+- Use of large halls for small classes.
+- Uneven teaching distribution.
+- Lack of schedule compactness.
+
+Do not automatically penalize:
+
+- Saturday.
+- Sunday.
+- Consecutive valid sessions.
+- Movement between university buildings.
+
+Official time slots already provide adequate transition time.
+
+Soft-constraint weights must be configurable and recorded with every run.
+
+Each scoring function should be independently testable.
+
+---
+
+## 17. Fitness and Cost
+
+Prefer a cost model in which lower values are better.
+
+Example structure:
+
+    total_cost =
+        hard_penalty
+        + lecturer_preference_cost
+        + gap_cost
+        + room_waste_cost
+        + distribution_cost
+
+Hard penalties must dominate all possible soft improvements.
+
+A valid timetable must always rank better than an invalid timetable.
+
+Do not rely on an arbitrary hard penalty without checking whether accumulated
+soft scores could exceed it.
+
+Preferred approaches include:
+
+- Rejecting invalid individuals.
+- Lexicographic comparison:
+  1. Hard-violation count.
+  2. Soft cost.
+- A provably dominant hard-penalty value.
+
+Recommended evaluation result:
+
+    EvaluationResult(
+        hard_violation_count=0,
+        hard_violations=[],
+        soft_cost=125.0,
+        soft_breakdown={
+            "lecturer_preferences": 25.0,
+            "room_capacity_waste": 60.0,
+            "schedule_gaps": 40.0,
+        },
+        total_cost=125.0,
+    )
+
+Do not return only one unexplained fitness number.
+
+Store a detailed score breakdown for experimentation and reporting.
+
+---
+
+## 18. Population Initialization
+
+Precompute feasible domains for each course section.
+
+Example:
+
+    feasible_assignments[section_code] = [
+        Assignment(day, slot, room),
+        ...
+    ]
+
+An assignment belongs to the feasible domain only when its local constraints
+pass:
+
+- Slot supports the course type.
+- Slot has the required duration.
+- Room type is compatible.
+- Room capacity is sufficient.
+- Room is active.
+- Mandatory lecturer restrictions are respected.
+
+Global conflicts between different genes may still exist and must be handled by
+evaluation or repair.
+
+When a section has no feasible assignment:
+
+- Stop before starting the GA.
+- Return a clear diagnostic.
+- Include the section code and reason.
+
+Do not generate thousands of known-invalid genes and expect the fitness
+function to repair everything.
+
+Use a mixture of:
+
+- Random feasible initialization.
+- Heuristic initialization.
+- Diversity preservation.
+
+Avoid producing identical initial individuals.
+
+---
+
+## 19. Selection
+
+Implement at least one clear selection strategy.
+
+Tournament selection is recommended because it is:
+
+- Simple.
+- Efficient.
+- Easy to test.
+- Compatible with minimization cost.
+
+Selection must use the documented comparison rule.
+
+When using lexicographic evaluation:
+
+1. Prefer fewer hard violations.
+2. When equal, prefer lower soft cost.
+
+Do not compare only raw fitness when hard and soft components are stored
+separately.
+
+Selection must not mutate individuals.
+
+---
+
+## 20. Crossover
+
+Crossover must preserve one gene per course section.
+
+After crossover:
+
+- No section may be missing.
+- No section may appear twice.
+- Fixed lecturer and course-section data must remain unchanged.
+- Only assignable scheduling values may come from parents.
+
+Suitable strategies include:
+
+- One-point crossover on a stable section order.
+- Two-point crossover.
+- Uniform crossover by section.
+- Group-aware crossover by lecturer or course-section subsets.
+
+Do not use crossover designs that change the meaning or identity of gene
+positions.
+
+After crossover:
+
+1. Validate chromosome structure.
+2. Evaluate hard conflicts.
+3. Repair when practical.
+4. Preserve diversity.
+
+Crossover must be deterministic when supplied with a controlled random
+generator and seed.
+
+---
+
+## 21. Mutation
+
+Mutation may change:
+
+- Day.
+- Time slot.
+- Room.
+- A complete feasible assignment.
+
+Mutation must not change:
+
+- Course-section identity.
+- Primary lecturer.
+- Course identity.
+- Session duration.
+- Required room type.
+- Scheduling student count.
+
+Prefer selecting mutation values from the precomputed feasible domain.
+
+Possible mutation operations:
+
+- Change room while keeping day and slot.
+- Change day and compatible slot.
+- Change the full assignment.
+- Swap compatible assignments between two sections when valid.
+- Move a conflicting gene to a feasible alternative.
+
+Mutation must respect the configured mutation probability.
+
+Do not apply every mutation type to every individual unconditionally.
+
+---
+
+## 22. Repair
+
+Repair should target common hard conflicts.
+
+Possible repair order:
+
+1. Missing or structurally invalid gene.
+2. Invalid slot compatibility.
+3. Invalid room type.
+4. Insufficient capacity.
+5. Mandatory lecturer restriction.
+6. Lecturer conflict.
+7. Room conflict.
+
+Repair should:
+
+- Use feasible-domain candidates.
+- Prefer changes with low soft cost.
+- Avoid infinite loops.
+- Have a configurable attempt limit.
+- Return whether repair succeeded.
+- Preserve the course-section identity.
+
+When repair fails:
+
+- Keep the individual as invalid with explicit violations.
+- Or discard and regenerate it.
+
+Do not silently remove a course section from the chromosome.
+
+---
+
+## 23. Elitism and Diversity
+
+Use elitism to preserve a small number of best individuals.
+
+Do not copy so many elite individuals that population diversity collapses.
+
+Track diversity using one or more simple indicators:
+
+- Unique chromosome count.
+- Assignment-distance estimate.
+- Duplicate ratio.
+- Gene-level variation.
+
+When the population converges too early, possible responses include:
+
+- Increase mutation temporarily.
+- Inject new feasible random individuals.
+- Reduce elite count.
+- Use diversity-aware survivor selection.
+
+Any adaptive behavior must be documented and testable.
+
+---
+
+## 24. Stopping Conditions
+
+Supported stopping conditions may include:
+
+- Maximum generation count.
+- Time limit.
+- No improvement for a configured number of generations.
+- A valid timetable reaching a target soft cost.
+- Explicit cancellation by the caller.
+
+The algorithm should safely preserve the best-so-far individual when stopped.
+
+A cancelled run should not be reported as a technical failure.
+
+Differentiate:
+
+- Completed normally.
+- Stopped by time limit.
+- Stopped by stagnation.
+- Cancelled by user.
+- Failed because of invalid input.
+- Failed because of an unexpected error.
+
+---
+
+## 25. Reproducibility
+
+All randomness must come from an injected or locally controlled random
+generator.
+
+Do not use uncontrolled global randomness throughout the module.
+
+A run should record:
+
+- Random seed.
+- Population size.
+- Generation count.
+- Mutation rate.
+- Crossover rate.
+- Soft-constraint weights.
+- Stopping conditions.
+- Input-data version.
+
+Given the same:
+
+- Validated input.
+- Configuration.
+- Seed.
+- Code version.
+
+the algorithm should produce reproducible or meaningfully equivalent results.
+
+Unit tests must use fixed seeds.
+
+---
+
+## 26. Algorithm Input Contract
+
+The GA should receive normalized domain data, not raw CSV rows.
+
+Suggested input concepts:
+
+    GeneticAlgorithmInput
+    ├── course_sections
+    ├── lecturers
+    ├── rooms
+    ├── time_slots
+    ├── lecturer_preferences
+    ├── mandatory_lecturer_restrictions
+    ├── room_unavailability
+    └── configuration
+
+Raw values such as Vietnamese CSV labels should be normalized before entering
+the GA module.
+
+The GA module must not:
+
+- Open CSV files.
+- Parse CSV rows.
+- Query the database.
+- Read environment variables directly.
+- Depend on web request objects.
+
+---
+
+## 27. Algorithm Output Contract
+
+The result should include more than a timetable list.
+
+Suggested output:
+
+    GeneticAlgorithmResult
+    ├── status
+    ├── best_candidate
+    ├── evaluation
+    ├── generation_count
+    ├── execution_time
+    ├── seed
+    ├── stop_reason
+    ├── fitness_history
+    └── diagnostics
+
+Each timetable assignment should include:
+
+- Course-section code.
+- Primary lecturer code.
+- Day of week.
+- Slot code.
+- Start period.
+- End period.
+- Room code.
+- Course type.
+- Required room type.
+- Scheduling student count.
+
+Do not create dated session occurrences inside the core GA result unless the
+design explicitly requires a separate expansion step.
+
+---
+
+## 28. Error Handling
+
+Use explicit domain exceptions or result types for expected failures.
+
+Examples:
+
+- No feasible room for a course section.
+- No compatible time slot.
+- Empty course-section dataset.
+- Invalid GA configuration.
+- Invalid mutation rate.
+- Invalid crossover rate.
+- Missing lecturer reference.
+- Missing room reference.
+
+Do not hide domain errors behind a generic message such as:
+
+    Genetic Algorithm failed.
+
+Return actionable diagnostics.
+
+Unexpected errors may be logged by the application layer, but the GA module
+must not depend on a framework logger.
+
+---
+
+## 29. Performance
+
+The initial target is approximately:
+
+- 20 lecturers.
+- 100–200 course sections.
+- About 200 genes per chromosome.
+- Approximately 1,500–3,000 dated occurrences after calendar expansion.
+
+Optimize the chromosome and evaluation for course-section genes, not expanded
+occurrences.
+
+Use indexes such as:
+
+- Assignments by lecturer and day.
+- Assignments by room and day.
+- Compatible slots by course type and duration.
+- Compatible rooms by room type and capacity.
+- Preferences by lecturer.
+
+Avoid repeatedly scanning the complete dataset for every small check when an
+index can be prepared once.
+
+Do not sacrifice correctness for premature micro-optimization.
+
+Measure performance before introducing complex caching.
+
+---
+
+## 30. Logging and Metrics
+
+The module may expose structured progress information.
+
+Useful metrics include:
+
+- Current generation.
+- Best hard-violation count.
+- Best soft cost.
+- Average population cost.
+- Number of unique individuals.
+- Repair attempts.
+- Repair success rate.
+- Execution time.
+
+Do not print directly to standard output from core algorithm functions.
+
+Use callbacks, events, return values, or an injected progress reporter.
+
+Do not log every gene in every generation during normal execution.
+
+---
+
+## 31. Testing Requirements
+
+At minimum, unit tests must cover:
+
+### Time and overlap
+
+- Same lecturer in the same slot.
+- Same lecturer in partially overlapping slots.
+- Same room in the same slot.
+- Same room in partially overlapping slots.
+- Periods 1–5 versus periods 2–6.
+- Non-overlapping consecutive sessions.
+- Valid weekend schedules.
+
+### Course types
+
+- Theory with a three-period slot.
+- Practice with periods 1–5.
+- Practice with periods 1–6.
+- Practice with periods 2–6.
+- Integrated class with five periods.
+- Integrated class with six periods.
+- Invalid course-type and slot combination.
+
+### Rooms
+
+- Compatible room type.
+- Incompatible room type.
+- Sufficient capacity.
+- Insufficient capacity.
+- Standard-room preference.
+- Large-room soft penalty.
+- Large room remaining valid when needed.
+
+### Lecturer rules
+
+- One lecturer teaching multiple non-overlapping classes.
+- One lecturer teaching different courses.
+- Consecutive sessions remaining valid.
+- Preferred weekend teaching.
+- Undesired weekday penalty.
+- Mandatory restriction as a hard constraint.
+- Non-mandatory preference remaining soft.
+
+### Genetic operations
+
+- Population initialization.
+- Structural chromosome validity.
+- Selection reproducibility.
+- Crossover preserving all course sections.
+- Mutation preserving fixed fields.
+- Repair resolving common conflicts.
+- Repair failure returning diagnostics.
+- Elitism preserving the best candidate.
+- Fixed-seed reproducibility.
+- Safe stopping with best-so-far result.
+
+### Evaluation
+
+- Valid candidate has zero hard violations.
+- Invalid candidate never outranks a valid candidate.
+- Soft-cost breakdown matches the total.
+- Configurable weights affect ranking.
+- Saturday and Sunday receive no default penalty.
+
+Use small datasets whose expected solution can be checked manually.
+
+---
+
+## 32. Out-of-Scope Algorithm Features
+
+Do not implement these features unless the approved requirements change:
+
+- Automatic lecturer-to-course assignment.
+- Student course registration.
+- Student accounts.
+- Individual student timetables.
+- Student availability matching.
+- Automatic makeup-session selection.
+- Automatic negotiation with students.
+- Practice-class group splitting.
+- Multiple primary lecturers per course section.
+- Automatic substitute-lecturer assignment.
+- Automatic schedule segmentation by date range.
+- Automatic movement of holiday sessions.
+- Travel-time optimization between buildings.
+- Guaranteed globally optimal solutions.
+- Full university-scale production optimization.
+
+---
+
+## 33. Code Quality
+
+- Use clear type annotations.
+- Use dataclasses or equivalent typed domain objects.
+- Keep pure evaluation functions free of side effects.
+- Separate initialization, evaluation, selection, crossover, mutation, repair,
+  and stopping logic.
+- Avoid large functions handling the entire algorithm.
+- Avoid unstructured nested dictionaries where typed objects are clearer.
+- Avoid mutable global state.
+- Inject random generators and configuration.
+- Document non-obvious algorithm decisions.
+- Keep constraint identifiers stable.
+- Remove debugging prints.
+- Do not catch broad exceptions without re-raising or returning diagnostics.
+- Do not duplicate business rules from unrelated modules.
+
+Prefer correctness and explainability over clever but opaque code.
+
+---
+
+## 34. Change Discipline
+
+When changing the GA model or a constraint:
+
+1. Review the latest URS and SRS.
+2. Confirm whether the rule is hard or soft.
+3. Update the relevant domain type.
+4. Update feasible-domain generation.
+5. Update evaluation.
+6. Update repair when applicable.
+7. Update sample CSV data when applicable.
+8. Add or update tests.
+9. Record the change in algorithm documentation.
+10. Check whether previously stored experiment results remain comparable.
+
+Do not change chromosome meaning without documenting migration and test impact.
+
+---
+
+## 35. Definition of Done
+
+A Genetic Algorithm change is complete when:
+
+- It follows the latest URS and SRS.
+- It preserves fixed teaching assignments.
+- It uses one base weekly gene per course section for the MVP.
+- It selects only configured valid time slots.
+- It correctly detects partial overlaps.
+- It enforces room type and capacity.
+- It treats weekends as valid days.
+- It distinguishes mandatory restrictions from soft preferences.
+- It provides a detailed hard/soft evaluation breakdown.
+- It is reproducible with a fixed seed.
+- It remains independent of HTTP, ORM, and CSV parsing.
+- Relevant unit tests pass.
+- Performance is acceptable for 100–200 course sections.
+- No hard constraint is silently relaxed.
