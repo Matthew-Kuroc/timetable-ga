@@ -1,4 +1,6 @@
-course_code,course_name,section_code,lecturer_code,number_of_sessions,periods_per_session,expected_students,initial_registration_limit,approved_max_students,current_registered_students,scheduling_student_count,course_type,weeks,campus_code,notes
-CT101,Nhập môn lập trình,CT101-01,GV001,2,3,50,55,,48,55,LY_THUYET,1-2,CS1,
-CT102,Cấu trúc dữ liệu,CT102-01,GV002,2,3,45,50,,42,50,LY_THUYET,1-2,CS1,
-CT103,Thực hành lập trình,CT103-01,GV003,2,3,35,40,,34,40,THUC_HANH,1-2,CS1,
+course_code,course_name,section_code,lecturer_code,required_sessions,weekly_sessions,periods_per_session,expected_students,initial_registration_limit,approved_max_students,scheduling_student_count,course_type,required_room_type,start_date,end_date,campus_code,notes
+IT401,Phân tích thiết kế thuật toán,IT401_01,GV001,15,1,3,50,50,55,55,THEORY,THEORY_ROOM,2026-09-01,2026-12-20,CS1,
+IT402,Cơ sở dữ liệu,IT402_01,GV002,15,1,3,48,50,,50,THEORY,THEORY_ROOM,2026-09-01,2026-12-20,CS1,
+IT403,Thực hành lập trình,IT403_01,GV003,15,1,5,35,40,,40,PRACTICE,COMPUTER_LAB,2026-09-01,2026-12-20,CS1,
+IT404,Phát triển ứng dụng tích hợp,IT404_01,GV004,15,1,6,42,45,,45,INTEGRATED,SPECIALIZED_LAB,2026-09-01,2026-12-20,CS1,
+IT405,Kiến trúc máy tính,IT405_01,GV001,15,1,3,90,100,,100,THEORY,THEORY_ROOM,2026-09-01,2026-12-20,CS1,Cần phòng lớn

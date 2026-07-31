@@ -1,413 +1,530 @@
-# AGENTS.md
+# Repository Agent Instructions
 
 ## 1. Purpose
 
-This file defines repository-wide instructions for AI coding agents working
-on `timetable-ga`.
+This repository contains the internship project:
 
-These rules apply to every directory in the repository unless a more specific
-`AGENTS.md` exists in a subdirectory.
+**Teaching Timetable Scheduling Application Using Genetic Algorithm**
 
-The goal is to ensure that every change is:
+The system is a web application that supports:
 
-- Grounded in documented requirements.
-- Limited to the assigned task.
-- Easy to review and test.
-- Safe for the repository and user data.
-- Consistent with the project architecture.
-- Appropriate for a student internship project.
+- Importing timetable input data from CSV files.
+- Validating and normalizing input data.
+- Configuring and running a Genetic Algorithm.
+- Generating teaching timetable candidates.
+- Viewing timetables by lecturer, room, and course section.
+- Manually adjusting schedules with conflict validation.
+- Processing lecturer schedule-change requests.
+- Exporting results to CSV and Excel.
+
+Keep all implementations within the approved internship-project scope.
 
 ---
 
-## 2. Project overview
+## 2. Instruction Scope and Precedence
 
-`timetable-ga` is a web application for generating university teaching
-timetables using a Genetic Algorithm.
+This file applies to the entire repository.
 
-The main users are:
+More specific instructions may exist in nested files:
 
-- Training Department staff or timetable managers.
+- `backend/AGENTS.md`
+- `backend/app/algorithms/genetic/AGENTS.md`
+- `frontend/AGENTS.md`
+
+When instructions conflict, the closest `AGENTS.md` to the modified file takes precedence.
+
+The latest approved URS and SRS documents are the primary business-requirement sources. When requirements conflict:
+
+1. Use the latest approved URS/SRS version.
+2. Prefer explicit business decisions over earlier assumptions.
+3. Do not invent missing requirements.
+4. Record unresolved issues in the requirements documentation before implementation.
+
+Before starting a new implementation session, read
+`docs/backlog/TKB-001-to-TKB-005.md` for the current technical handoff and
+prioritized backlog. It is not a replacement for the URS/SRS.
+
+---
+
+## 3. Approved System Users
+
+The runtime application has two primary roles.
+
+### Training Office
+
+The Training Office may:
+
+- Sign in.
+- Import and validate CSV data.
+- Configure and run the Genetic Algorithm.
+- View all timetable results.
+- Select a timetable candidate for use.
+- Directly edit a timetable.
+- Review lecturer adjustment requests.
+- Approve, reject, or modify proposed changes.
+- Add makeup sessions manually.
+- Export timetable data.
+- View execution and change history.
+
+### Lecturer
+
+A lecturer may:
+
+- Sign in.
+- View their personal timetable.
+- View details of assigned course sections.
+- Submit schedule-adjustment requests.
+- Track the processing status of submitted requests.
+
+A lecturer must not:
+
+- Create or delete course sections.
+- Change the official timetable directly.
+- Approve their own request.
+- Modify another lecturer's timetable.
+- Reject an assigned course section.
+
+Do not introduce a separate technical-administrator role into the MVP unless the requirements are formally changed.
+
+---
+
+## 4. Teaching Assignment Rules
+
+Teaching assignments are prepared before timetable generation.
+
+The Genetic Algorithm does not decide which lecturer teaches which course.
+
+The following rules apply:
+
+- Each course section has exactly one primary lecturer.
+- A lecturer may teach multiple course sections.
+- A lecturer may teach multiple sections of the same course.
+- A lecturer may teach different courses in the same semester.
+- A lecturer may teach consecutive sessions.
+- A lecturer must not teach overlapping sessions.
+- Practical classes are not split into student groups.
+- A course section is not jointly assigned to multiple primary lecturers.
+
+A substitute lecturer for one exceptional session, when supported later, does not replace the primary lecturer of the course section.
+
+---
+
+## 5. Course-Section Schedule Model
+
+Under the current agreed model:
+
+- Each course section has one regular meeting per week.
+- A course section may contain approximately 15 occurrences in a semester.
+- A dataset of 100–200 course sections may therefore produce roughly 1,500–3,000 dated occurrences.
+
+For the MVP Genetic Algorithm:
+
+- One gene represents the base weekly assignment of one course section.
+- A gene selects the day, time slot, and room.
+- The lecturer and course section are fixed by teaching-assignment data.
+- Dated session occurrences are generated after the base timetable is created.
+
+Do not model every dated occurrence as an independent GA gene unless a documented design decision changes this approach.
+
+---
+
+## 6. Course Types and Period Rules
+
+Supported course types are:
+
+- `THEORY`
+- `PRACTICE`
+- `INTEGRATED`
+
+### Theory
+
+Theory classes normally use one three-period session.
+
+Configured theory slots may include:
+
+- Periods 1–3
+- Periods 4–6
+- Periods 7–9
+- Periods 10–12
+- Periods 13–15
+
+### Practice
+
+Practice classes use five or six periods.
+
+Current valid practice slots are:
+
+- Periods 1–5
+- Periods 1–6
+- Periods 2–6
+
+### Integrated theory and practice
+
+An integrated course:
+
+- Is one course section.
+- Is taught by one lecturer.
+- Combines theory and practice in the same session.
+- Uses five or six periods.
+- Uses the same time-slot rules as a practice class.
+- May require a computer laboratory, specialized room, or normal theory room depending on input data.
+
+Do not infer the required room type only from the course type. Use the explicit room requirement of the course section.
+
+Never generate arbitrary period ranges. All generated schedules must use configured valid time slots.
+
+A session must remain inside one valid teaching block. Do not create schedules that cross the break between morning and afternoon sessions.
+
+---
+
+## 7. Teaching Days and Lecturer Preferences
+
+Monday through Sunday are valid teaching days.
+
+Saturday, Sunday, and evening slots remain valid teaching times. The default
+quality policy may apply configurable soft avoidance weights to these times
+because they are normally less preferred.
+
+An explicit lecturer preferred day or preferred slot must override the default
+avoidance for that lecturer. The GA may still use these slots when they are the
+best feasible option; this is never a hard-constraint violation.
+
+Lecturer preferences are soft constraints and may include:
+
+- Preferred teaching days.
+- Preferred time slots.
+- Undesired teaching days.
+- Undesired time slots.
+- Preference for compact teaching days.
+- Preference to reduce long gaps between sessions.
+
+Do not assume a lecturer's unexpected future absence is known before course registration.
+
+Only treat an unavailable slot as a hard constraint when the input explicitly marks it as a confirmed fixed restriction.
+
+---
+
+## 8. Room Rules
+
+Every room has its own:
+
+- Room code.
+- Room type.
+- Physical capacity.
+- Availability status.
+- Optional unavailable dates or time slots.
+
+A room assignment is valid only when:
+
+- The room is not occupied by another class at the same time.
+- The room type satisfies the course-section requirement.
+- The room capacity is greater than or equal to the scheduling student count.
+- The room is available during the applicable date range.
+
+The scheduling student count should use:
+
+1. The approved maximum student count, when available.
+2. Otherwise, the initial registration limit.
+3. Otherwise, the expected student count.
+
+An approved registration limit must never exceed the physical capacity of the assigned room.
+
+### Large rooms
+
+Large lecture halls, including rooms with approximately 130 seats:
+
+- Are not restricted to general-education courses.
+- May be used by any compatible course section.
+- May be used for manual schedule changes or makeup sessions.
+- Should normally be preserved for large classes or used when standard rooms are unavailable.
+
+For automatic scheduling, prefer a standard room whose capacity is reasonably close to the class size.
+
+Using a large hall for a small class is a soft-constraint violation, not a hard-constraint violation.
+
+The Training Office may manually confirm a large room when all hard constraints are satisfied.
+
+Do not add a travel-time constraint between rooms or buildings. Official time slots already provide sufficient transition time.
+
+---
+
+## 9. Academic Calendar and Holidays
+
+The timetable uses actual dates together with an academic-calendar mapping.
+
+The academic calendar should identify:
+
+- Semester start date.
+- Semester end date.
+- Academic week number.
+- Teaching days.
+- Holidays and non-teaching days.
+
+When a regular class date falls on a holiday:
+
+- Do not generate a normal session occurrence for that date.
+- Do not display the session as `SUSPENDED`.
+- Treat the date as empty.
+- Record that the course section may be missing one required session.
+- Allow the Training Office to add a makeup session manually later.
+
+Do not automatically move every holiday session to the next week.
+
+A course is considered complete when its regular and makeup sessions satisfy the required number of sessions or periods.
+
+---
+
+## 10. Schedule Segments and Exceptions
+
+A course section may use different rooms during different date ranges.
+
+Example:
+
+- From the semester start to 15 October: room A303.
+- From 16 October to the semester end: room F201.
+
+The data model must support schedule segments containing:
+
+- Effective start date.
+- Effective end date.
+- Day of week.
+- Time slot.
+- Room.
+
+For the MVP:
+
+- The Genetic Algorithm creates one base schedule for the course section.
+- The Training Office may manually split the schedule into date-range segments.
+- The Genetic Algorithm does not need to create multiple room segments automatically.
+
+The system should support adjustment scopes such as:
+
+- One specific session.
+- A selected date range.
+- From a selected date to the end of the course.
+- The entire regular schedule before the registration lock point.
+
+A one-session exception takes precedence over the base segment for that date.
+
+---
+
+## 11. Schedule Adjustments
+
+The system supports two adjustment paths.
+
+### Direct adjustment
+
+A lecturer may contact the Training Office outside the system.
+
+The Training Office then directly edits the official timetable.
+
+### Lecturer request
+
+A lecturer may submit an adjustment request in the application.
+
+The request may include:
+
+- Affected course section or session.
+- Request type.
+- Reason.
+- Proposed date.
+- Proposed time slot.
+- Proposed room.
+
+The request must not change the timetable until the Training Office processes it.
+
+Typical request states are:
+
+- `PENDING`
+- `APPROVED`
+- `REJECTED`
+- `CANCELLED`
+- `APPLIED`
+
+Every applied change must be traceable.
+
+Before applying a change, validate all hard constraints.
+
+The system does not need to find a time when every student is free. The lecturer, students, and Training Office resolve that issue outside this application.
+
+---
+
+## 12. Hard Constraints
+
+A timetable candidate or manual adjustment is invalid when it violates any of the following:
+
+- A lecturer teaches overlapping classes.
+- A room hosts overlapping classes.
+- A room type does not satisfy the course-section requirement.
+- Room capacity is smaller than the scheduling student count.
+- A time range is not a configured valid slot.
+- A session crosses an invalid teaching-block boundary.
+- A session is outside the semester or applicable date range.
+- A room is unavailable for the selected date and time.
+- A confirmed fixed lecturer restriction is violated.
+- Required schedule information is missing.
+- Two effective schedule segments create contradictory schedules for the same occurrence.
+
+Hard-constraint violations must not be silently accepted.
+
+Return a clear and actionable validation message.
+
+---
+
+## 13. Soft Constraints
+
+Soft constraints influence timetable quality but do not make a timetable invalid.
+
+Examples include:
+
+- Lecturer day and time preferences.
+- Reducing long gaps between a lecturer's sessions.
+- Avoiding unnecessarily scattered teaching days.
+- Maintaining a reasonably balanced teaching distribution.
+- Preferring weekdays and daytime sessions when no lecturer-specific preference applies.
+- Selecting rooms with capacity close to the class size.
+- Preserving large lecture halls when suitable standard rooms remain available.
+- Keeping a stable regular schedule for each course section.
+
+Do not make Saturday, Sunday, or evening sessions invalid solely because of
+their time. Their avoidance weights must be configurable and recorded with
+each GA run.
+
+Soft-constraint weights must be configurable and recorded with each GA run.
+
+---
+
+## 14. CSV Data Rules
+
+The team defines the CSV schemas used by the project.
+
+Default CSV requirements:
+
+- UTF-8 encoding.
+- Comma-separated values.
+- A header row.
+- Stable unique identifiers.
+- Explicit and documented field names.
+- Dates in one documented format.
+- No silent conversion of invalid values.
+
+The Training Office prepares one complete seven-file CSV batch in Excel and
+uploads it to the application. After preview and validation, only an explicitly
+confirmed batch is persisted and eligible for a GA run. The `official` sample
+directory is a development/test fixture and must not be the normal runtime
+input source.
+
+The input model may include:
+
 - Lecturers.
-- Technical administrators.
+- Lecturer preferences.
+- Course sections and teaching assignments.
+- Rooms.
+- Room availability.
+- Time slots.
+- Academic calendar dates.
+- Optional schedule segments.
+- Optional adjustment requests.
 
-The system is expected to support:
+CSV validation errors must identify:
 
-- CSV data import and validation.
-- Genetic Algorithm configuration and execution.
-- Hard and soft scheduling constraints.
-- Timetable views by lecturer, room and course section.
-- Lecturer weekly timetable views.
-- Timetable adjustment requests.
-- Conflict checking.
-- CSV and Excel export.
-- Experiment and run-history tracking.
+- File.
+- Row.
+- Column.
+- Invalid value.
+- Reason.
 
-Student course registration is outside the scope of this version.
-
-See `README.md` for the project overview.
-
----
-
-## 3. Sources of truth
-
-Before implementing a task, read the relevant sources in this order:
-
-1. The assigned GitHub Issue and its acceptance criteria.
-2. `docs/requirements/URS.md`.
-3. `docs/requirements/SRS.md`.
-4. The nearest applicable `AGENTS.md`.
-5. Relevant architecture, database, API or testing documents.
-6. Existing code and tests.
-7. `README.md`.
-
-If a referenced document does not exist yet, continue with the available
-sources and explicitly report what is missing.
-
-Do not treat README content marked as planned or expected as already
-implemented.
+Do not include real student personal data in sample files.
 
 ---
 
-## 4. Requirement conflicts and ambiguity
+## 15. Out-of-Scope Features
 
-Do not invent business rules.
+Do not implement the following unless the approved requirements change:
 
-When requirements are unclear or contradictory:
-
-1. Identify the exact ambiguity.
-2. Check the Issue, URS, SRS and current code.
-3. Explain the possible interpretations.
-4. State the impact of each interpretation.
-5. Ask for confirmation before implementing behavior that depends on it.
-
-A temporary assumption must:
-
-- Be stated explicitly.
-- Be easy to change.
-- Be placed in centralized configuration where appropriate.
-- Never be presented as a confirmed business rule.
-
-Known topics that may still require confirmation include:
-
-- The room-capacity rule.
-- Which student-count field is used for capacity checking.
-- The approval workflow for timetable changes.
-- The deadline for moving an entire recurring schedule.
-- Make-up class rules after a suspended session.
-- Practical-class scheduling rules.
-- Exceptional teaching time slots.
-- Official production CSV structures.
-- Initial weights for soft constraints.
+- Student accounts.
+- Course registration.
+- Tuition, grades, or student profiles.
+- Individual student timetables.
+- Finding a makeup time from every student's availability.
+- Automatic negotiation between lecturers and students.
+- Automatic email, SMS, or push notifications.
+- Automatic lecturer-to-course assignment.
+- Practical-class student-group splitting.
+- Multiple primary lecturers for one course section.
+- Full production integration with the university management system.
+- Guaranteed globally optimal GA results.
 
 ---
 
-## 5. Repository state
+## 16. Implementation Principles
 
-The repository may still be in an initialization stage.
-
-Do not assume that the following already exist:
-
-- FastAPI backend.
-- React frontend.
-- PostgreSQL database.
-- Database migrations.
-- Docker Compose.
-- Authentication.
-- Automated tests.
-- Lint or formatting configuration.
-- GitHub Actions.
-- Genetic Algorithm implementation.
-
-Inspect the repository before proposing or creating files.
-
-Do not generate the entire planned project structure for a small task.
-
-Create only the files required for the current Issue.
+- Keep business rules out of UI components.
+- Centralize validation so GA generation and manual editing use the same rules.
+- Keep the GA module independent of HTTP and database frameworks.
+- Prefer explicit types, enums, and domain objects over unstructured dictionaries.
+- Keep functions small and focused.
+- Avoid duplicated business-rule implementations.
+- Preserve old data and run history when creating a new timetable candidate.
+- Use deterministic random seeds in algorithm tests.
+- Add tests whenever a business rule is added or changed.
+- Do not silently relax a hard constraint to obtain a timetable.
+- Do not expand the project scope without updating URS/SRS first.
 
 ---
 
-## 6. Required workflow
+## 17. Testing Expectations
 
-Before changing files:
+At minimum, tests should cover:
 
-1. Check the current Git state.
-2. Read the assigned Issue.
-3. Read the applicable requirement documents.
-4. Inspect existing code and tests.
-5. Identify affected files.
-6. Present a short implementation plan for non-trivial tasks.
-7. Report ambiguities before relying on assumptions.
+- Lecturer-overlap detection.
+- Room-overlap detection.
+- Partial period overlap, such as periods 1–5 versus 2–6.
+- Room-type compatibility.
+- Room-capacity validation.
+- Valid and invalid time slots.
+- Weekend scheduling.
+- Lecturer preference scoring.
+- Large-room soft penalties.
+- Holiday occurrence generation.
+- Missing-session calculation.
+- Schedule-segment splitting.
+- One-session exceptions.
+- Direct timetable edits.
+- Lecturer-request approval and rejection.
+- CSV validation.
+- Deterministic GA execution with a fixed seed.
 
-Useful Git checks:
+Start with small datasets that can be checked manually.
 
-```bash
-git status
-git branch --show-current
-git log --oneline -5
-```
+The initial target dataset is approximately:
 
-Never overwrite uncommitted user changes.
-
----
-
-## 7. Scope discipline
-
-Make the smallest change that satisfies the assigned requirements.
-
-Do not:
-
-- Add unrelated features.
-- Perform large refactors during a small feature task.
-- Rename or reformat unrelated files.
-- Introduce speculative abstractions.
-- Add infrastructure that the current task does not require.
-- Replace existing frameworks without explicit approval.
-- Duplicate existing business logic.
-- Create files only because they appear in a planned folder tree.
-
-Prefer simple, readable and testable code over clever code.
+- 20 lecturers.
+- 100–200 course sections.
+- About 15 regular occurrences per course section.
+- Approximately 1,500–3,000 generated dated occurrences.
 
 ---
 
-## 8. Global business rules
+## 18. Documentation and Change Discipline
 
-The following principles apply across the system:
+When modifying a business rule:
 
-- A lecturer must not teach two classes at the same time.
-- A room must not host two classes at the same time.
-- Every course section must receive its required sessions.
-- Room type must match the course-section requirement.
-- Manual timetable changes must be checked for conflicts.
-- Hard constraints must never be silently ignored.
-- A high fitness score does not make a timetable valid when hard constraints
-  are violated.
-- Authorization must be enforced by the backend, not only by hiding frontend
-  controls.
+1. Check the latest URS and SRS.
+2. Update documentation before or together with the code.
+3. Update related sample CSV files.
+4. Update validation rules.
+5. Add or update tests.
+6. Record assumptions that still require confirmation.
 
-Detailed algorithm rules belong in:
-
-```text
-backend/app/algorithms/genetic/AGENTS.md
-```
-
----
-
-## 9. Technology boundaries
-
-The expected primary stack is:
-
-- Backend: Python and FastAPI.
-- Frontend: React and TypeScript.
-- Database: PostgreSQL.
-- Algorithm: Python.
-- Testing: pytest and appropriate frontend testing tools.
-- Collaboration: GitHub Issues and Pull Requests.
-
-Do not replace a primary technology without explicit approval.
-
-Before adding a production dependency, explain:
-
-- The problem it solves.
-- Why existing dependencies are insufficient.
-- Its maintenance and security implications.
-- Whether a simpler alternative exists.
-
-Do not add a dependency merely to avoid writing a small amount of clear code.
-
----
-
-## 10. Security and data safety
+Use Vietnamese for user-facing application text and project requirement documents unless an existing file explicitly uses another language.
 
 Never commit:
 
-```text
-.env
-.env.local
-.env.production
-*.pem
-*.key
-credentials.json
-secret.json
-access tokens
-API keys
-database passwords
-production database dumps
-unapproved personal data
-```
-
-Do not:
-
-- Store passwords in plain text.
-- log secrets or complete authentication tokens.
-- expose internal stack traces to users.
-- trust file names, MIME types or client-provided identifiers without
-  validation.
-- use real personal data as sample data unless its use has been approved.
-
-Use `.env.example` only for variable names and safe example values.
-
----
-
-## 11. Git safety
-
-Do not work directly on `main`.
-
-Use task-based branches, for example:
-
-```text
-feature/TKB-010-upload-csv
-bugfix/TKB-020-room-conflict
-docs/TKB-030-update-requirements
-test/TKB-040-add-constraint-tests
-refactor/TKB-050-fitness-evaluator
-chore/TKB-060-project-configuration
-```
-
-Do not run destructive Git commands without explicit user approval.
-
-Examples of destructive commands:
-
-```bash
-git reset --hard
-git clean -fd
-git restore .
-git checkout -- .
-git push --force
-```
-
-Do not push, merge, delete branches or create releases unless the user
-explicitly requests that action.
-
----
-
-## 12. Testing and verification
-
-Every behavior change should have appropriate verification.
-
-Depending on the task, this may include:
-
-- Unit tests.
-- Integration tests.
-- API tests.
-- Component tests.
-- Regression tests.
-- Constraint tests.
-- Build, lint or type checks.
-
-Do not claim that tests passed unless the commands were actually run.
-
-If tests cannot be run, report:
-
-- Which checks were not run.
-- Why they could not be run.
-- What command should be run later.
-- What risk remains.
-
-Do not delete, weaken or skip a test merely to make the test suite pass.
-
-Specific commands are defined in local `AGENTS.md` files after the relevant
-tooling has been configured.
-
----
-
-## 13. Definition of done
-
-A task is complete only when:
-
-- Its acceptance criteria are satisfied.
-- The implementation stays within scope.
-- Relevant tests have been added or updated.
-- Required checks have passed, or missing checks are clearly reported.
-- Existing behavior has not been unintentionally broken.
-- No secrets or unauthorized personal data are included.
-- Error cases and permissions are handled appropriately.
-- Documentation is updated when behavior changes.
-- Remaining assumptions and risks are stated.
-
-“Works on my machine” is not sufficient evidence of completion.
-
----
-
-## 14. Final response format
-
-After making changes, report:
-
-### Summary
-
-What was implemented or changed.
-
-### Files changed
-
-```text
-Created:
-- path/to/file
-
-Modified:
-- path/to/file
-
-Deleted:
-- None
-```
-
-### Verification
-
-- Commands run.
-- Results.
-- Checks not run and reasons.
-
-### Assumptions
-
-List any assumptions used.
-
-### Remaining risks
-
-List unresolved requirements, risks or follow-up work.
-
-Do not hide incomplete work.
-
----
-
-## 15. Local instruction files
-
-Read the nearest applicable instruction file before changing a specialized
-area.
-
-```text
-backend/AGENTS.md
-```
-
-Contains backend, FastAPI, Python, database, migration, API and backend-testing
-rules.
-
-```text
-frontend/AGENTS.md
-```
-
-Contains React, TypeScript, component, API-client, UI-state and
-frontend-testing rules.
-
-```text
-backend/app/algorithms/genetic/AGENTS.md
-```
-
-Contains chromosome, fitness, hard constraint, soft constraint, selection,
-crossover, mutation, seed, metric and algorithm-testing rules.
-
-Additional local instruction files may be introduced only when a directory has
-stable rules that do not belong in this root file.
-
----
-
-## 16. Final principles
-
-When choosing between guessing and asking for clarification, ask for
-clarification.
-
-When choosing between a large change and a small testable change, prefer the
-small testable change.
-
-When choosing between a high-scoring invalid timetable and a lower-scoring
-valid timetable, prefer the valid timetable.
-
-When choosing between clever code and clear code with tests, prefer clear code
-with tests.
+- Passwords.
+- API keys.
+- Access tokens.
+- `.env` files containing secrets.
+- Real private student data.
+- Generated build artifacts.
+- Large temporary experiment files without approval.

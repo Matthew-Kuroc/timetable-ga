@@ -1,0 +1,25 @@
+﻿lecturer_code,slot_code,mandatory,reason
+GV001,FRI_13_15,false,Không ưu tiên dạy ca tối
+GV001,MON_7_9,true,Lịch họp cố định đã được Phòng đào tạo xác nhận
+GV002,SAT_13_15,false,Không ưu tiên dạy ca tối
+GV003,SUN_13_15,false,Không ưu tiên dạy ca tối
+GV004,MON_13_15,false,Không ưu tiên dạy ca tối
+GV005,TUE_13_15,false,Không ưu tiên dạy ca tối
+GV006,WED_13_15,false,Không ưu tiên dạy ca tối
+GV006,SAT_7_9,true,Lịch họp cố định đã được Phòng đào tạo xác nhận
+GV007,THU_13_15,false,Không ưu tiên dạy ca tối
+GV008,FRI_13_15,false,Không ưu tiên dạy ca tối
+GV009,SAT_13_15,false,Không ưu tiên dạy ca tối
+GV010,SUN_13_15,false,Không ưu tiên dạy ca tối
+GV011,MON_13_15,false,Không ưu tiên dạy ca tối
+GV011,THU_7_9,true,Lịch họp cố định đã được Phòng đào tạo xác nhận
+GV012,TUE_13_15,false,Không ưu tiên dạy ca tối
+GV013,WED_13_15,false,Không ưu tiên dạy ca tối
+GV014,THU_13_15,false,Không ưu tiên dạy ca tối
+GV015,FRI_13_15,false,Không ưu tiên dạy ca tối
+GV016,SAT_13_15,false,Không ưu tiên dạy ca tối
+GV016,TUE_7_9,true,Lịch họp cố định đã được Phòng đào tạo xác nhận
+GV017,SUN_13_15,false,Không ưu tiên dạy ca tối
+GV018,MON_13_15,false,Không ưu tiên dạy ca tối
+GV019,TUE_13_15,false,Không ưu tiên dạy ca tối
+GV020,WED_13_15,false,Không ưu tiên dạy ca tối

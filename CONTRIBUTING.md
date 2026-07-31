@@ -1,963 +1,1153 @@
-# Hướng dẫn đóng góp cho dự án Timetable GA
+# Hướng dẫn đóng góp
 
-## 1. Mục đích
+Tài liệu này quy định cách các thành viên làm việc với mã nguồn, tài liệu, dữ
+liệu mẫu, nhánh Git và Pull Request trong dự án:
 
-Tài liệu này quy định cách các thành viên đóng góp mã nguồn, tài liệu, dữ liệu mẫu và các thay đổi khác vào repository `timetable-ga`.
+**Xây dựng ứng dụng lập thời khóa biểu giảng dạy sử dụng thuật toán Di truyền**
 
-Mục tiêu của quy trình là:
-
-- Không làm việc trực tiếp trên nhánh `main`.
-- Mỗi thay đổi có thể truy vết về một công việc cụ thể.
-- Hạn chế xung đột giữa các thành viên.
-- Mọi thay đổi đều được kiểm tra trước khi hợp nhất.
-- Không đưa mật khẩu, token hoặc dữ liệu nhạy cảm lên GitHub.
-- Giữ lịch sử Git rõ ràng và dễ hiểu.
-- Bảo đảm mã nguồn đáp ứng yêu cầu và có thể kiểm thử.
-
-Tất cả thành viên trong nhóm cần đọc tài liệu này trước khi bắt đầu làm việc.
+Mọi thành viên cần tuân thủ tài liệu này để hạn chế xung đột mã nguồn, sai lệch
+nghiệp vụ và mất khả năng truy vết thay đổi.
 
 ---
 
-## 2. Tổng quan quy trình làm việc
+## Mục lục
 
-Quy trình chuẩn của một công việc:
+- [1. Nguyên tắc chung](#1-nguyên-tắc-chung)
+- [2. Nguồn yêu cầu nghiệp vụ](#2-nguồn-yêu-cầu-nghiệp-vụ)
+- [3. Hướng dẫn AGENTS.md](#3-hướng-dẫn-agentsmd)
+- [4. Chuẩn bị môi trường làm việc](#4-chuẩn-bị-môi-trường-làm-việc)
+- [5. Quy trình làm việc với Git](#5-quy-trình-làm-việc-với-git)
+- [6. Quy ước đặt tên branch](#6-quy-ước-đặt-tên-branch)
+- [7. Quy ước commit](#7-quy-ước-commit)
+- [8. Quy trình Pull Request](#8-quy-trình-pull-request)
+- [9. Quy tắc review](#9-quy-tắc-review)
+- [10. Thay đổi yêu cầu nghiệp vụ](#10-thay-đổi-yêu-cầu-nghiệp-vụ)
+- [11. Quy tắc đối với backend](#11-quy-tắc-đối-với-backend)
+- [12. Quy tắc đối với frontend](#12-quy-tắc-đối-với-frontend)
+- [13. Quy tắc đối với thuật toán](#13-quy-tắc-đối-với-thuật-toán)
+- [14. Quy tắc kiểm thử](#14-quy-tắc-kiểm-thử)
+- [15. Quy tắc dữ liệu CSV](#15-quy-tắc-dữ-liệu-csv)
+- [16. Quy tắc tài liệu](#16-quy-tắc-tài-liệu)
+- [17. Bảo mật và dữ liệu riêng tư](#17-bảo-mật-và-dữ-liệu-riêng-tư)
+- [18. Quy tắc merge](#18-quy-tắc-merge)
+- [19. Checklist trước khi hoàn thành](#19-checklist-trước-khi-hoàn-thành)
+- [20. Các hành vi không được phép](#20-các-hành-vi-không-được-phép)
+
+---
+
+## 1. Nguyên tắc chung
+
+Mọi thay đổi trong repository phải tuân theo các nguyên tắc sau:
+
+- Làm đúng phạm vi đề tài thực tập.
+- Không tự ý mở rộng nghiệp vụ.
+- Không thay đổi quy tắc đã chốt mà không cập nhật tài liệu.
+- Không làm yếu ràng buộc cứng để thuật toán dễ tìm nghiệm hơn.
+- Không sửa trực tiếp trên nhánh `main`.
+- Mỗi công việc phải được thực hiện trên một branch riêng.
+- Mỗi Pull Request chỉ nên tập trung vào một mục tiêu chính.
+- Mã nguồn phải có khả năng đọc, kiểm thử và truy vết.
+- Không đưa thông tin nhạy cảm vào repository.
+- Không sử dụng dữ liệu cá nhân thật khi chưa được phép.
+- Không merge khi chưa có thành viên khác review.
+- Không bỏ qua lỗi chỉ để Pull Request được merge.
+
+Ưu tiên:
+
+1. Tính đúng đắn của nghiệp vụ.
+2. Tính an toàn của dữ liệu.
+3. Khả năng kiểm thử.
+4. Khả năng đọc và bảo trì.
+5. Hiệu năng.
+6. Tối ưu hóa nhỏ.
+
+---
+
+## 2. Nguồn yêu cầu nghiệp vụ
+
+Các tài liệu yêu cầu chính của dự án được lưu trong:
 
 ```text
-Tạo hoặc nhận GitHub Issue
-        ↓
-Cập nhật nhánh main
-        ↓
-Tạo branch từ main
-        ↓
-Code và kiểm thử
-        ↓
-Commit thay đổi
-        ↓
-Push branch lên GitHub
-        ↓
-Mở Pull Request
-        ↓
-Thành viên khác review
-        ↓
-Sửa theo góp ý nếu cần
-        ↓
-Test và CI thành công
-        ↓
-Merge vào main
+docs/requirements/
 ```
 
-Không được bỏ qua Pull Request bằng cách push trực tiếp lên `main`.
+Các tài liệu hiện tại gồm:
+
+```text
+docs/requirements/TaiLieu_UR_cap_nhat_0.2.docx
+docs/requirements/TaiLieu_SRS_cap_nhat_0.3.docx
+```
+
+Trong đó:
+
+- URS mô tả nhu cầu người dùng và phạm vi nghiệp vụ.
+- SRS mô tả yêu cầu chức năng, dữ liệu, ràng buộc và tiêu chí chấp nhận.
+- `README.md` giới thiệu tổng quan dự án.
+- `AGENTS.md` hướng dẫn AI coding agents và thành viên khi sửa mã nguồn.
+- `CONTRIBUTING.md` quy định quy trình đóng góp.
+
+Khi có sự khác biệt giữa tài liệu và mã nguồn:
+
+1. Kiểm tra phiên bản URS và SRS mới nhất.
+2. Xác định thay đổi nào được phê duyệt gần nhất.
+3. Không tự suy diễn yêu cầu.
+4. Cập nhật tài liệu trước hoặc đồng thời với mã nguồn.
+5. Thêm kiểm thử cho hành vi mới.
+6. Ghi rõ thay đổi trong Pull Request.
+
+Mã nguồn không được xem là nguồn yêu cầu duy nhất.
 
 ---
 
-## 3. Chuẩn bị môi trường
+## 3. Hướng dẫn AGENTS.md
 
-### 3.1. Yêu cầu tối thiểu
+Trước khi sửa một thư mục, phải đọc file `AGENTS.md` gần nhất.
 
-Thành viên cần cài đặt:
+Các file dự kiến gồm:
 
-- Git.
-- Visual Studio Code hoặc IDE phù hợp.
-- Tài khoản GitHub.
-- Quyền truy cập repository.
-- Các công nghệ của dự án sau khi được thiết lập:
-  - Python.
-  - Node.js.
-  - PostgreSQL.
-  - Docker và Docker Compose nếu được sử dụng.
-
-Kiểm tra Git:
-
-```bash
-git --version
+```text
+AGENTS.md
+backend/AGENTS.md
+backend/app/algorithms/AGENTS.md
+backend/app/algorithms/genetic/AGENTS.md
+frontend/AGENTS.md
 ```
 
-Cấu hình tên và email:
+Quy tắc ưu tiên:
 
-```bash
-git config --global user.name "Tên hoặc GitHub username"
-git config --global user.email "email@example.com"
+1. `AGENTS.md` ở thư mục gốc áp dụng cho toàn repository.
+2. `AGENTS.md` trong thư mục con bổ sung quy tắc chi tiết.
+3. File `AGENTS.md` gần file đang sửa nhất được ưu tiên khi có khác biệt.
+
+Ví dụ:
+
+Khi sửa file trong:
+
+```text
+backend/app/algorithms/genetic/
 ```
 
-Khuyến khích sử dụng email `noreply` của GitHub nếu không muốn công khai email cá nhân.
+cần đọc:
 
-Kiểm tra cấu hình:
-
-```bash
-git config --global user.name
-git config --global user.email
+```text
+AGENTS.md
+backend/AGENTS.md
+backend/app/algorithms/AGENTS.md
+backend/app/algorithms/genetic/AGENTS.md
 ```
+
+Không bỏ qua hướng dẫn ở các file này.
 
 ---
 
-## 4. Clone repository
+## 4. Chuẩn bị môi trường làm việc
 
-Clone repository về máy:
+Trước khi bắt đầu một công việc:
 
-```bash
-git clone https://github.com/Matthew-Kuroc/timetable-ga.git
-cd timetable-ga
-```
-
-Kiểm tra remote:
-
-```bash
-git remote -v
-```
-
-Kiểm tra trạng thái:
-
-```bash
+```powershell
+cd D:\DoAn\DuAn\timetable-ga
 git status
-```
-
-Kiểm tra nhánh hiện tại:
-
-```bash
-git branch --show-current
-```
-
-Sau khi clone, nhánh mặc định phải là:
-
-```text
-main
-```
-
----
-
-## 5. Không code trực tiếp trên main
-
-Nhánh `main` được dùng để lưu phiên bản đã được review và tương đối ổn định.
-
-Không thực hiện thay đổi trực tiếp trên `main`.
-
-Trước khi bắt đầu công việc mới:
-
-```bash
 git switch main
 git pull origin main
 ```
 
-Sau đó tạo branch mới:
+Kết quả mong đợi:
 
-```bash
-git switch -c feature/TKB-010-upload-csv
+- Đang đứng ở nhánh `main`.
+- Nhánh `main` đã được cập nhật.
+- Không có file chưa commit từ công việc trước.
+- Không có xung đột đang tồn tại.
+
+Kiểm tra danh sách branch:
+
+```powershell
+git branch
 ```
 
-Mỗi branch nên phục vụ một Issue hoặc một nhiệm vụ cụ thể.
+Kiểm tra branch từ xa:
 
----
-
-## 6. Quy ước tên branch
-
-Cấu trúc chung:
-
-```text
-<loại>/TKB-<mã-issue>-<mô-tả-ngắn>
+```powershell
+git branch -r
 ```
 
-Tên branch:
+Không bắt đầu công việc mới khi thư mục làm việc còn thay đổi chưa được xử lý.
 
-- Viết bằng chữ thường.
-- Không dùng khoảng trắng.
-- Dùng dấu gạch ngang `-` để phân tách từ.
-- Mô tả ngắn nhưng rõ ràng.
-- Không dùng tên thành viên làm tên branch.
+Khi có thay đổi chưa hoàn thành, cần:
 
-### 6.1. Branch chức năng
+- Commit vào branch phù hợp.
+- Hoặc stash tạm thời.
+- Hoặc loại bỏ thay đổi nếu chắc chắn không cần.
 
-```text
-feature/TKB-010-upload-csv
-feature/TKB-011-user-login
-feature/TKB-012-weekly-timetable-view
-feature/TKB-013-run-genetic-algorithm
+Ví dụ stash:
+
+```powershell
+git stash push -m "WIP: unfinished timetable work"
 ```
 
-### 6.2. Branch sửa lỗi
+Khôi phục:
 
-```text
-bugfix/TKB-020-room-time-conflict
-bugfix/TKB-021-invalid-csv-header
-bugfix/TKB-022-lecturer-permission
-```
-
-### 6.3. Branch tài liệu
-
-```text
-docs/TKB-030-update-readme
-docs/TKB-031-add-srs
-docs/TKB-032-update-api-documentation
-```
-
-### 6.4. Branch kiểm thử
-
-```text
-test/TKB-040-add-fitness-tests
-test/TKB-041-add-upload-api-tests
-```
-
-### 6.5. Branch refactor
-
-```text
-refactor/TKB-050-split-fitness-evaluator
-refactor/TKB-051-extract-schedule-service
-```
-
-### 6.6. Branch cấu hình
-
-```text
-chore/TKB-060-initialize-project
-chore/TKB-061-configure-pytest
-chore/TKB-062-add-github-actions
-```
-
-Không nên sử dụng:
-
-```text
-phi-branch
-huy-code
-tien
-test-moi
-branch-1
+```powershell
+git stash pop
 ```
 
 ---
 
-## 7. GitHub Issue
+## 5. Quy trình làm việc với Git
 
-Mỗi chức năng, lỗi hoặc công việc đáng kể nên có một GitHub Issue.
+Mỗi công việc nên đi theo quy trình:
 
-Issue nên có:
+```text
+Cập nhật main
+    ↓
+Tạo branch mới
+    ↓
+Đọc URS/SRS và AGENTS.md
+    ↓
+Thực hiện thay đổi
+    ↓
+Chạy kiểm thử
+    ↓
+Kiểm tra git diff
+    ↓
+Commit
+    ↓
+Push branch
+    ↓
+Tạo Pull Request
+    ↓
+Review
+    ↓
+Sửa theo góp ý
+    ↓
+Merge vào main
+```
 
-- Tiêu đề rõ ràng.
-- Mục tiêu.
-- Mô tả yêu cầu.
-- Tiêu chí chấp nhận.
-- Người phụ trách.
-- Nhãn phù hợp.
-- Tài liệu liên quan.
-- Các điểm chưa rõ.
+Ví dụ:
+
+```powershell
+git switch main
+git pull origin main
+git switch -c docs/TKB-003-update-contributing
+```
+
+Sau khi sửa:
+
+```powershell
+git status
+git diff
+```
+
+Thêm file:
+
+```powershell
+git add CONTRIBUTING.md
+```
+
+Commit:
+
+```powershell
+git commit -m "docs: update contribution guidelines"
+```
+
+Push:
+
+```powershell
+git push -u origin docs/TKB-003-update-contributing
+```
+
+Không thực hiện công việc trực tiếp trên `main`.
+
+---
+
+## 6. Quy ước đặt tên branch
+
+Cấu trúc:
+
+```text
+<type>/TKB-<number>-<short-description>
+```
+
+Các loại branch:
+
+| Loại       | Mục đích                                  |
+| ---------- | ----------------------------------------- |
+| `feature`  | Thêm chức năng mới                        |
+| `fix`      | Sửa lỗi                                   |
+| `docs`     | Sửa tài liệu                              |
+| `test`     | Thêm hoặc sửa kiểm thử                    |
+| `refactor` | Cải tiến cấu trúc mã mà không đổi hành vi |
+| `chore`    | Công việc cấu hình, công cụ hoặc khởi tạo |
+| `perf`     | Cải thiện hiệu năng                       |
+| `build`    | Thay đổi quy trình build                  |
+| `ci`       | Thay đổi CI/CD                            |
+
+Ví dụ hợp lệ:
+
+```text
+feature/TKB-010-csv-import
+feature/TKB-015-ga-configuration
+fix/TKB-021-room-overlap
+fix/TKB-024-period-range-overlap
+docs/TKB-003-update-contributing
+docs/TKB-004-update-requirements
+test/TKB-030-ga-capacity-tests
+refactor/TKB-035-extract-constraint-service
+chore/TKB-001-initialize-project
+perf/TKB-040-optimize-fitness-evaluation
+```
+
+Không dùng:
+
+```text
+my-branch
+new-feature
+phi-test
+fix
+update
+branch1
+```
+
+Tên branch phải:
+
+- Viết thường.
+- Dùng dấu gạch ngang.
+- Mô tả ngắn gọn công việc.
+- Không chứa dấu tiếng Việt.
+- Không chứa khoảng trắng.
+- Không dùng tên thành viên làm mục đích chính.
+
+---
+
+## 7. Quy ước commit
+
+Commit message nên theo cấu trúc:
+
+```text
+<type>: <short description>
+```
+
+Các loại commit:
+
+| Loại       | Mục đích                        |
+| ---------- | ------------------------------- |
+| `feat`     | Thêm chức năng                  |
+| `fix`      | Sửa lỗi                         |
+| `docs`     | Sửa tài liệu                    |
+| `test`     | Thêm hoặc sửa test              |
+| `refactor` | Cải tiến cấu trúc mã            |
+| `chore`    | Cấu hình hoặc công việc phụ trợ |
+| `perf`     | Cải thiện hiệu năng             |
+| `build`    | Thay đổi build                  |
+| `ci`       | Thay đổi CI/CD                  |
+| `style`    | Chỉ thay đổi định dạng mã       |
+
+Ví dụ:
+
+```text
+feat: add CSV preview
+feat: add lecturer timetable view
+feat: support schedule segments
+fix: detect partial period overlap
+fix: reject insufficient room capacity
+fix: preserve timetable after rejected request
+docs: update scheduling requirements
+docs: revise project README
+test: add room capacity validation tests
+test: cover weekend lecturer preferences
+refactor: extract timetable constraint service
+perf: reduce repeated room compatibility checks
+chore: initialize frontend structure
+```
+
+Commit message cần:
+
+- Ngắn gọn.
+- Mô tả kết quả thay đổi.
+- Viết ở thể mệnh lệnh hoặc mô tả hành động.
+- Không kết thúc bằng dấu chấm.
+- Không dùng nội dung mơ hồ.
+
+Không dùng:
+
+```text
+update
+fix bug
+done
+test
+abc
+final
+final final
+code mới
+sửa chút
+```
+
+### 7.1. Quy mô commit
+
+Một commit nên chứa một thay đổi có ý nghĩa.
+
+Ví dụ tốt:
+
+```text
+fix: detect lecturer overlap by period range
+```
+
+Ví dụ không tốt:
+
+```text
+feat: add login, update README, fix GA, change database and format files
+```
+
+Không gộp nhiều công việc không liên quan vào cùng một commit.
+
+### 7.2. Kiểm tra trước khi commit
+
+```powershell
+git status
+git diff
+git diff --staged
+```
+
+Không commit:
+
+- File tạm.
+- File build.
+- File log.
+- File `.env` thật.
+- Thư mục IDE không cần thiết.
+- Dữ liệu riêng tư.
+- Mật khẩu hoặc token.
+- File thay đổi ngoài phạm vi công việc.
+
+---
+
+## 8. Quy trình Pull Request
+
+Mọi thay đổi vào `main` phải thông qua Pull Request.
+
+### 8.1. Nội dung Pull Request
+
+Pull Request cần mô tả:
+
+- Vấn đề hoặc yêu cầu được xử lý.
+- Các file hoặc mô-đun chính đã thay đổi.
+- Hành vi mới.
+- Cách kiểm thử.
+- Ảnh chụp màn hình nếu thay đổi giao diện.
+- Ảnh hưởng đến dữ liệu hoặc API.
+- Ảnh hưởng đến URS/SRS.
+- Nội dung còn chưa hoàn thành.
+- Rủi ro hoặc giới hạn đã biết.
 
 Ví dụ:
 
 ```markdown
-# [TKB-010] Nhập dữ liệu phân công giảng dạy từ CSV
-
 ## Mục tiêu
 
-Cho phép Phòng đào tạo tải file phân công giảng dạy lên hệ thống.
+Thêm kiểm tra xung đột giảng viên theo khoảng tiết thực tế.
 
-## Yêu cầu
+## Thay đổi chính
 
-- Chỉ chấp nhận file CSV.
-- Kiểm tra các cột bắt buộc.
-- Hiển thị dữ liệu xem trước.
-- Hiển thị lỗi theo dòng và cột.
-- Không lưu dữ liệu lỗi.
-
-## Tiêu chí chấp nhận
-
-- File hợp lệ được đọc thành công.
-- File thiếu cột bị từ chối.
-- Lỗi hiển thị tên cột và số dòng.
-- Có test cho trường hợp hợp lệ và không hợp lệ.
-```
-
-Không bắt đầu một chức năng lớn khi chưa xác định rõ phạm vi.
-
----
-
-## 8. Làm việc trên branch
-
-Sau khi tạo branch, kiểm tra:
-
-```bash
-git status
-git branch --show-current
-```
-
-Trong quá trình làm việc, thường xuyên kiểm tra:
-
-```bash
-git status
-```
-
-Xem thay đổi chưa được stage:
-
-```bash
-git diff
-```
-
-Xem thay đổi đã được stage:
-
-```bash
-git diff --staged
-```
-
-Không sử dụng `git add .` một cách máy móc nếu thư mục đang có nhiều file không liên quan.
-
-Có thể add từng file:
-
-```bash
-git add README.md
-git add backend/app/services/import_service.py
-```
-
-Hoặc add theo thư mục:
-
-```bash
-git add backend/tests/
-```
-
-Trước khi commit, luôn chạy:
-
-```bash
-git status
-```
-
----
-
-## 9. Quy ước commit message
-
-Dự án sử dụng cấu trúc commit gần với Conventional Commits:
-
-```text
-<type>(<scope>): <mô tả ngắn>
-```
-
-Phần `scope` có thể bỏ nếu không cần.
-
-### 9.1. Các loại commit
-
-| Loại       | Ý nghĩa                                 |
-| ---------- | --------------------------------------- |
-| `feat`     | Thêm chức năng mới                      |
-| `fix`      | Sửa lỗi                                 |
-| `docs`     | Thay đổi tài liệu                       |
-| `test`     | Thêm hoặc sửa kiểm thử                  |
-| `refactor` | Tái cấu trúc nhưng không đổi hành vi    |
-| `chore`    | Cấu hình hoặc công việc hỗ trợ          |
-| `perf`     | Cải thiện hiệu năng                     |
-| `build`    | Thay đổi hệ thống build hoặc dependency |
-| `ci`       | Thay đổi GitHub Actions hoặc CI         |
-| `style`    | Thay đổi format không ảnh hưởng logic   |
-
-### 9.2. Ví dụ commit tốt
-
-```text
-feat(upload): validate required CSV columns
-feat(auth): add lecturer login endpoint
-fix(schedule): prevent lecturer time conflicts
-fix(export): preserve Vietnamese characters in CSV
-test(fitness): add room capacity constraint cases
-docs(readme): update project scope
-refactor(ga): separate hard and soft penalties
-chore: initialize project structure
-ci: add backend test workflow
-```
-
-### 9.3. Commit không nên sử dụng
-
-```text
-update
-fix
-sửa code
-code mới
-test
-done
-final
-update lần 2
-```
-
-### 9.4. Nguyên tắc commit
-
-Một commit nên:
-
-- Có một mục đích chính.
-- Không chứa nhiều chức năng không liên quan.
-- Không chứa file tạm.
-- Không chứa file bí mật.
-- Có thể đọc hiểu qua commit message.
-- Không làm hỏng build hoặc test một cách có chủ ý.
-
-Không cần tạo commit cho từng dòng code. Tuy nhiên, cũng không nên dồn toàn bộ công việc trong nhiều ngày vào một commit duy nhất.
-
----
-
-## 10. Push branch
-
-Lần đầu push một branch:
-
-```bash
-git push -u origin feature/TKB-010-upload-csv
-```
-
-Các lần sau:
-
-```bash
-git push
-```
-
-Kiểm tra branch trên GitHub trước khi mở Pull Request.
-
-Không push trực tiếp:
-
-```bash
-git push origin main
-```
-
----
-
-## 11. Pull Request
-
-Sau khi hoàn thành công việc, mở Pull Request từ branch hiện tại vào `main`.
-
-### 11.1. Tiêu đề Pull Request
-
-Tiêu đề nên tương tự commit chính:
-
-```text
-feat(upload): add CSV import validation
-```
-
-Hoặc:
-
-```text
-[TKB-010] Thêm chức năng nhập file CSV
-```
-
-### 11.2. Nội dung Pull Request
-
-Mẫu đề xuất:
-
-```markdown
-## Issue liên quan
-
-Closes #10
-
-## Mục tiêu
-
-Cho phép Phòng đào tạo tải và kiểm tra file CSV phân công giảng dạy.
-
-## Nội dung thay đổi
-
-- Thêm API upload CSV.
-- Kiểm tra định dạng file.
-- Kiểm tra các cột bắt buộc.
-- Trả lỗi theo dòng và cột.
-- Thêm unit test.
+- Thêm hàm kiểm tra hai khoảng tiết chồng nhau.
+- Áp dụng cho kiểm tra giảng viên.
+- Áp dụng cho kiểm tra phòng.
+- Bổ sung test cho tiết 1–5 và tiết 2–6.
 
 ## Cách kiểm thử
 
-1. Khởi chạy backend.
-2. Upload file CSV hợp lệ.
-3. Upload file thiếu cột `lecturer_code`.
-4. Kiểm tra nội dung lỗi trả về.
+- Chạy unit test của constraint service.
+- Kiểm tra hai lớp tiết 1–5 và 2–6 bị báo trùng.
+- Kiểm tra hai lớp tiết 1–3 và 4–6 không bị báo trùng.
 
-## Kết quả kiểm thử
+## Tài liệu liên quan
 
-- `pytest`: thành công.
-- `ruff check .`: thành công.
-
-## Checklist
-
-- [ ] Đáp ứng acceptance criteria.
-- [ ] Không code trực tiếp trên main.
-- [ ] Đã thêm hoặc cập nhật test.
-- [ ] Test cũ không bị hỏng.
-- [ ] Không commit `.env`.
-- [ ] Không chứa mật khẩu hoặc token.
-- [ ] Đã cập nhật tài liệu nếu hành vi thay đổi.
-- [ ] Không có thay đổi ngoài phạm vi Issue.
-
-## Ảnh chụp màn hình
-
-Thêm ảnh nếu Pull Request thay đổi giao diện.
-
-## Lưu ý hoặc rủi ro
-
-Nêu các điểm còn thiếu hoặc cần xác nhận.
+Không thay đổi yêu cầu nghiệp vụ.
 ```
 
-Không mở Pull Request có quá nhiều chức năng không liên quan.
+### 8.2. Tiêu đề Pull Request
 
----
+Tiêu đề nên mô tả rõ công việc.
 
-## 12. Review code
+Ví dụ:
 
-Một Pull Request phải được ít nhất một thành viên khác kiểm tra trước khi merge, nếu cấu hình repository cho phép.
-
-Người review cần kiểm tra:
-
-- Thay đổi có đúng Issue không?
-- Có đáp ứng acceptance criteria không?
-- Có vượt phạm vi không?
-- Có vi phạm URS hoặc SRS không?
-- Có tự thêm quy tắc nghiệp vụ không?
-- Có test không?
-- Test có kiểm tra đúng hành vi không?
-- Có làm hỏng chức năng cũ không?
-- Có lỗi bảo mật không?
-- Có commit secret không?
-- Có kiểm tra quyền ở backend không?
-- Có dependency mới không?
-- Có cập nhật tài liệu khi cần không?
-- Code có dễ đọc không?
-- Có thay đổi file không liên quan không?
-
-### 12.1. Các loại phản hồi review
-
-- **Approve:** Đồng ý merge.
-- **Request changes:** Cần sửa trước khi merge.
-- **Comment:** Góp ý hoặc đặt câu hỏi.
-
-Không approve chỉ vì người mở PR là thành viên cùng nhóm.
-
-### 12.2. Khi được yêu cầu sửa
-
-Người tạo PR:
-
-1. Đọc từng comment.
-2. Trao đổi nếu chưa rõ.
-3. Sửa trên cùng branch.
-4. Commit và push tiếp.
-5. Trả lời comment.
-6. Yêu cầu review lại.
-
-Không cần đóng PR và tạo PR mới chỉ vì có thay đổi nhỏ.
-
----
-
-## 13. Kiểm thử trước khi merge
-
-Các lệnh chính thức sẽ được cập nhật sau khi backend và frontend được khởi tạo.
-
-### 13.1. Backend dự kiến
-
-```bash
-cd backend
-pytest
-ruff check .
-ruff format --check .
+```text
+[TKB-010] Add CSV import preview
+[TKB-021] Fix partial period overlap detection
+[TKB-003] Update contribution guidelines
 ```
 
-### 13.2. Frontend dự kiến
+Không dùng:
 
-```bash
-cd frontend
-npm run lint
-npm test
-npm run build
+```text
+Update
+Fix
+My work
+Done
+Final
+Pull request 1
 ```
 
-### 13.3. Nguyên tắc
+### 8.3. Quy mô Pull Request
 
-Không ghi trong PR rằng kiểm thử thành công nếu chưa thật sự chạy.
+Một Pull Request nên:
 
-Nếu chưa thể chạy test, phải ghi rõ:
+- Tập trung vào một mục tiêu.
+- Có số lượng file thay đổi hợp lý.
+- Có thể review trong một lần.
+- Không trộn định dạng toàn bộ dự án với thay đổi nghiệp vụ.
+- Không sửa file không liên quan.
 
-- Test nào chưa chạy.
-- Vì sao chưa chạy.
-- Người review cần thực hiện bước nào.
-- Rủi ro còn lại.
+Khi công việc quá lớn, chia thành nhiều Pull Request.
 
----
+Ví dụ:
 
-## 14. Definition of Done
-
-Một Issue chỉ được xem là hoàn thành khi:
-
-- Đáp ứng đầy đủ acceptance criteria.
-- Code nằm trên branch riêng.
-- Không vượt phạm vi Issue.
-- Có test phù hợp.
-- Test mới thành công.
-- Test cũ không bị hỏng.
-- Lint hoặc build thành công nếu đã cấu hình.
-- Không có secret.
-- Không có file debug không cần thiết.
-- Không có dữ liệu cá nhân trái phép.
-- Xử lý được các trường hợp lỗi quan trọng.
-- Phân quyền được kiểm tra ở backend nếu có liên quan.
-- Tài liệu được cập nhật khi hành vi thay đổi.
-- Pull Request được review.
-- Các yêu cầu sửa quan trọng đã được xử lý.
-- Pull Request được merge vào `main`.
-
-Chỉ code xong nhưng chưa test và chưa review chưa được xem là hoàn thành.
+```text
+PR 1: tạo domain models
+PR 2: tạo validation service
+PR 3: tạo API endpoints
+PR 4: tạo frontend workflow
+```
 
 ---
 
-## 15. Merge Pull Request
+## 9. Quy tắc review
+
+Mỗi Pull Request cần ít nhất một thành viên khác review trước khi merge.
+
+Reviewer cần kiểm tra:
+
+- Thay đổi có đúng mục tiêu không.
+- Có tuân theo URS và SRS không.
+- Có đọc đúng `AGENTS.md` không.
+- Có mở rộng phạm vi ngoài đề tài không.
+- Có làm yếu ràng buộc cứng không.
+- Có nhân bản logic nghiệp vụ không.
+- Có thiếu kiểm thử không.
+- Có dữ liệu nhạy cảm không.
+- Có lỗi phân quyền không.
+- Có lỗi xử lý trạng thái không.
+- Có thông báo lỗi rõ ràng không.
+- Có ảnh hưởng đến file CSV mẫu không.
+- Có cần cập nhật tài liệu không.
+
+### 9.1. Cách ghi nhận xét
+
+Nhận xét nên rõ và có hướng xử lý.
+
+Ví dụ tốt:
+
+```text
+Hàm này chỉ so sánh slot_code nên chưa phát hiện được trường hợp
+tiết 1–5 chồng với tiết 2–6. Nên dùng start_period và end_period.
+```
+
+Ví dụ không tốt:
+
+```text
+Sai.
+```
+
+Reviewer nên phân biệt:
+
+- `Blocking`: cần sửa trước khi merge.
+- `Suggestion`: đề xuất cải thiện, không bắt buộc.
+- `Question`: cần giải thích.
+- `Nit`: góp ý nhỏ về cách trình bày.
+
+### 9.2. Phản hồi review
+
+Người tạo Pull Request cần:
+
+- Đọc toàn bộ nhận xét.
+- Trả lời khi cần làm rõ.
+- Sửa trực tiếp trên cùng branch.
+- Push commit mới.
+- Không tạo Pull Request khác chỉ để sửa review.
+- Đánh dấu nhận xét đã xử lý sau khi kiểm tra.
+- Không tự ý bỏ qua nhận xét blocking.
+
+---
+
+## 10. Thay đổi yêu cầu nghiệp vụ
+
+Một thay đổi được xem là thay đổi nghiệp vụ khi ảnh hưởng đến:
+
+- Vai trò người dùng.
+- Quyền truy cập.
+- Quy trình xử lý.
+- Dữ liệu đầu vào.
+- Ràng buộc cứng.
+- Ràng buộc mềm.
+- Cách tính sức chứa.
+- Cách xếp ngày hoặc khung giờ.
+- Mô hình gene.
+- Loại lớp học phần.
+- Phòng học.
+- Ngày lễ.
+- Học bù.
+- Phân đoạn lịch.
+- Phạm vi dự án.
+
+Khi thay đổi nghiệp vụ:
+
+1. Đọc URS và SRS hiện tại.
+2. Xác định thay đổi đã được thống nhất chưa.
+3. Cập nhật URS/SRS.
+4. Cập nhật `README.md` khi ảnh hưởng tổng quan.
+5. Cập nhật `AGENTS.md` liên quan.
+6. Cập nhật domain models.
+7. Cập nhật validation.
+8. Cập nhật GA nếu có liên quan.
+9. Cập nhật frontend.
+10. Cập nhật CSV mẫu.
+11. Thêm hoặc sửa kiểm thử.
+12. Ghi rõ ảnh hưởng trong Pull Request.
+
+Không thay đổi nghiệp vụ chỉ bằng cách sửa code.
+
+### 10.1. Ràng buộc cứng
+
+Các ràng buộc cứng không được tự ý giảm mức xử lý.
+
+Ví dụ:
+
+- Trùng giảng viên.
+- Trùng phòng.
+- Sai loại phòng.
+- Phòng không đủ sức chứa.
+- Khung giờ không hợp lệ.
+- Vi phạm hạn chế bắt buộc.
+- Thiếu lịch cơ sở.
+
+Không được chuyển một lỗi cứng thành cảnh báo mềm để thuật toán dễ tìm nghiệm.
+
+### 10.2. Ràng buộc mềm
+
+Ràng buộc mềm có thể thay đổi trọng số, nhưng phải:
+
+- Có cấu hình rõ ràng.
+- Có kiểm thử.
+- Có giải thích.
+- Được lưu cùng lần chạy GA.
+- Không làm phương án vi phạm cứng tốt hơn phương án hợp lệ.
+
+### 10.3. Ngày cuối tuần
+
+Thứ Bảy và Chủ nhật là ngày dạy hợp lệ.
+
+Không thêm mức phạt mặc định cho cuối tuần.
+
+Chỉ áp dụng điểm ưu tiên hoặc không mong muốn dựa trên dữ liệu nguyện vọng của
+từng giảng viên.
+
+### 10.4. Phòng lớn
+
+Phòng khoảng 130 chỗ:
+
+- Không bị khóa riêng cho môn đại cương.
+- Có thể dùng cho lớp phù hợp.
+- Nên được ưu tiên cho lớp đông hoặc khi thiếu phòng tiêu chuẩn.
+- Sử dụng cho lớp nhỏ chỉ là vấn đề tối ưu mềm.
+- Không được xem là lỗi cứng nếu đủ loại phòng và sức chứa.
+
+---
+
+## 11. Quy tắc đối với backend
+
+Khi thay đổi backend:
+
+- Đọc `backend/AGENTS.md`.
+- Không đặt nghiệp vụ trong route handler.
+- Không truy cập database trực tiếp từ thuật toán.
+- Không để API tự suy diễn dữ liệu chưa được chuẩn hóa.
+- Kiểm tra quyền tại backend.
+- Trả về lỗi có cấu trúc.
+- Dùng kiểu dữ liệu rõ ràng.
+- Tách validation khỏi persistence.
+- Không nhân bản cùng một quy tắc ở nhiều service.
+- Không trả lỗi chung chung khi có thể cung cấp nguyên nhân cụ thể.
+
+Backend là nguồn quyết định cuối cùng đối với:
+
+- Xác thực.
+- Phân quyền.
+- Ràng buộc cứng.
+- Kiểm tra xung đột.
+- Áp dụng thay đổi lịch.
+- Xử lý yêu cầu.
+- Lưu dữ liệu.
+- Xuất kết quả.
+
+Frontend không được xem là lớp bảo vệ duy nhất.
+
+---
+
+## 12. Quy tắc đối với frontend
+
+Khi thay đổi frontend:
+
+- Đọc `frontend/AGENTS.md`.
+- Sử dụng tiếng Việt cho nội dung giao diện.
+- Không hiển thị enum thô cho người dùng.
+- Không nhân bản toàn bộ logic nghiệp vụ từ backend.
+- Hiển thị đầy đủ trạng thái loading, empty và error.
+- Kiểm tra quyền theo vai trò trên giao diện.
+- Vẫn phải dựa vào backend để bảo vệ thao tác.
+- Không sử dụng `any` tùy tiện.
+- Không gọi API trực tiếp từ nhiều component không liên quan.
+- Không tải toàn bộ dữ liệu khi chỉ cần một tuần hoặc một bộ lọc.
+- Không dùng màu sắc làm cách duy nhất để truyền đạt trạng thái.
+- Không thêm giao diện sinh viên ngoài phạm vi.
+
+Mọi form cần:
+
+- Có nhãn.
+- Đánh dấu trường bắt buộc.
+- Hiển thị lỗi gần trường nhập.
+- Giữ lại dữ liệu khi có lỗi.
+- Ngăn gửi lặp.
+- Xác nhận trước thao tác quan trọng.
+
+---
+
+## 13. Quy tắc đối với thuật toán
+
+Khi thay đổi thuật toán:
+
+- Đọc `backend/app/algorithms/AGENTS.md`.
+- Đọc `backend/app/algorithms/genetic/AGENTS.md` nếu sửa GA.
+- Không để thuật toán đọc CSV trực tiếp.
+- Không để thuật toán truy cập database.
+- Không phụ thuộc HTTP hoặc framework API.
+- Nhận dữ liệu đã được kiểm tra và chuẩn hóa.
+- Trả kết quả có kiểu rõ ràng.
+- Sử dụng một gene cho lịch cơ sở của một lớp học phần trong MVP.
+- Không thay đổi giảng viên đã phân công.
+- Không sinh khung tiết tùy ý.
+- Không mặc định phạt Thứ Bảy hoặc Chủ nhật.
+- Kiểm tra xung đột bằng khoảng tiết thực tế.
+- Không chỉ so sánh `slot_code`.
+- Phòng không đủ sức chứa là vi phạm cứng.
+- Phòng quá lớn chỉ là vấn đề mềm.
+- Ghi nhận seed để tái lập.
+- Trả chi tiết vi phạm thay vì một fitness không giải thích.
+
+Một phương án hợp lệ luôn phải được xếp trên phương án có vi phạm cứng.
+
+---
+
+## 14. Quy tắc kiểm thử
+
+Mọi thay đổi nghiệp vụ hoặc sửa lỗi phải có kiểm thử phù hợp.
+
+### 14.1. Kiểm thử backend
+
+Nên bao gồm:
+
+- Unit test.
+- Service test.
+- API test.
+- Authorization test.
+- Validation test.
+- Database integration test khi cần.
+
+### 14.2. Kiểm thử frontend
+
+Nên bao gồm:
+
+- Component behavior.
+- Form validation.
+- Role-based navigation.
+- Loading state.
+- Empty state.
+- Error state.
+- API success và failure.
+- Các luồng quan trọng từ góc nhìn người dùng.
+
+### 14.3. Kiểm thử thuật toán
+
+Tối thiểu cần kiểm tra:
+
+- Trùng giảng viên.
+- Trùng phòng.
+- Chồng một phần khoảng tiết.
+- Tiết 1–5 với tiết 2–6.
+- Hai ca liên tiếp không bị xem là chồng.
+- Lớp lý thuyết với ca ba tiết.
+- Lớp thực hành với ca năm hoặc sáu tiết.
+- Lớp tích hợp.
+- Loại phòng tương thích.
+- Phòng không đủ sức chứa.
+- Phòng lớn hợp lệ nhưng bị phạt mềm khi phù hợp.
+- Thứ Bảy và Chủ nhật hợp lệ.
+- Nguyện vọng cuối tuần.
+- Hạn chế bắt buộc của giảng viên.
+- Crossover giữ đủ lớp học phần.
+- Mutation không đổi giảng viên.
+- Seed cố định tạo kết quả tái lập.
+- Phương án hợp lệ tốt hơn phương án vi phạm cứng.
+
+### 14.4. Test dữ liệu nhỏ
+
+Các quy tắc mới nên được kiểm tra trước với dữ liệu nhỏ có thể tính bằng tay.
+
+Ví dụ:
+
+- 2 giảng viên.
+- 3 phòng.
+- 5 lớp học phần.
+- 4 khung giờ.
+
+Không chỉ kiểm thử bằng dữ liệu lớn mà không biết đáp án mong đợi.
+
+### 14.5. Không bỏ qua test
+
+Không được:
+
+- Xóa test đang thất bại chỉ để pipeline xanh.
+- Đánh dấu skip mà không ghi lý do.
+- Giảm assertion để che lỗi.
+- Sửa dữ liệu test trái nghiệp vụ.
+- Bắt mọi exception và coi là thành công.
+
+---
+
+## 15. Quy tắc dữ liệu CSV
+
+Nhóm tự thiết kế cấu trúc CSV cho dự án.
+
+Quy ước mặc định:
+
+- Mã hóa UTF-8.
+- Dùng dấu phẩy để phân tách.
+- Có dòng tiêu đề.
+- Tên cột ổn định.
+- Mã định danh duy nhất.
+- Ngày có định dạng thống nhất.
+- Không bỏ qua giá trị sai một cách im lặng.
+
+Các nhóm dữ liệu có thể gồm:
+
+- Giảng viên.
+- Nguyện vọng giảng viên.
+- Hạn chế cố định của giảng viên.
+- Học phần.
+- Lớp học phần.
+- Phân công giảng dạy.
+- Phòng học.
+- Thời gian phòng không sử dụng.
+- Khung giờ.
+- Lịch học kỳ.
+- Ngày lễ.
+- Phân đoạn lịch.
+
+Khi thay đổi cấu trúc CSV:
+
+1. Cập nhật tài liệu mô tả cột.
+2. Cập nhật file mẫu.
+3. Cập nhật bộ kiểm tra dữ liệu.
+4. Cập nhật schema backend.
+5. Cập nhật frontend upload hoặc preview.
+6. Cập nhật test.
+7. Ghi rõ breaking change trong Pull Request.
+
+Lỗi CSV phải chỉ rõ:
+
+- Tệp.
+- Dòng.
+- Cột.
+- Giá trị.
+- Nguyên nhân.
+- Hướng xử lý khi có thể.
+
+Không commit dữ liệu thật chưa được phép sử dụng.
+
+---
+
+## 16. Quy tắc tài liệu
+
+Tài liệu phải được cập nhật khi thay đổi:
+
+- Nghiệp vụ.
+- API.
+- Cấu trúc CSV.
+- Cấu trúc thư mục.
+- Cách cài đặt.
+- Cách chạy.
+- Quy trình đóng góp.
+- Quy trình kiểm thử.
+- Tham số thuật toán.
+- Phạm vi chức năng.
+
+Các file có thể cần cập nhật:
+
+```text
+README.md
+CONTRIBUTING.md
+AGENTS.md
+backend/AGENTS.md
+frontend/AGENTS.md
+backend/app/algorithms/AGENTS.md
+backend/app/algorithms/genetic/AGENTS.md
+docs/requirements/*
+data/samples/README.md
+```
+
+Không cập nhật số phiên bản URS hoặc SRS mà không thêm lịch sử thay đổi trong
+tài liệu.
+
+Không xóa nội dung còn giá trị lịch sử nếu chưa có lý do rõ ràng.
+
+Khi thay đổi đường dẫn file tài liệu, cần cập nhật liên kết trong `README.md`.
+
+---
+
+## 17. Bảo mật và dữ liệu riêng tư
+
+Không commit:
+
+- Mật khẩu.
+- API key.
+- Access token.
+- Refresh token.
+- Private key.
+- Chuỗi kết nối database thật.
+- File `.env` thật.
+- Cookie phiên đăng nhập.
+- Tài khoản quản trị thật.
+- Dữ liệu sinh viên thật.
+- Dữ liệu giảng viên nhạy cảm chưa được phép.
+- File sao lưu database chứa dữ liệu riêng tư.
+
+Chỉ commit:
+
+```text
+.env.example
+```
+
+File `.env.example` chỉ chứa:
+
+- Tên biến.
+- Giá trị giả.
+- Hướng dẫn cấu hình.
+
+Ví dụ:
+
+```env
+DATABASE_URL=postgresql://username:password@localhost:5432/timetable
+SECRET_KEY=replace-with-a-secure-secret
+```
+
+Không đặt bí mật thật trong ví dụ.
+
+### 17.1. Dữ liệu mẫu
+
+Dữ liệu mẫu phải:
+
+- Là dữ liệu giả lập.
+- Hoặc đã được ẩn danh.
+- Không chứa thông tin nhận dạng cá nhân không cần thiết.
+- Không chứa email, số điện thoại hoặc mã sinh viên thật.
+- Không chứa mật khẩu thật.
+
+### 17.2. Khi phát hiện bí mật đã commit
+
+Thực hiện ngay:
+
+1. Không chỉ xóa file ở commit mới.
+2. Thông báo cho nhóm.
+3. Thu hồi hoặc thay đổi bí mật.
+4. Kiểm tra lịch sử Git.
+5. Làm sạch lịch sử khi cần.
+6. Kiểm tra log và Pull Request.
+7. Cập nhật `.gitignore`.
+
+---
+
+## 18. Quy tắc merge
+
+Nhánh `main` phải luôn ở trạng thái có thể sử dụng.
 
 Chỉ merge khi:
 
 - Pull Request đã được review.
-- Các comment quan trọng đã được xử lý.
-- Test thành công.
-- Không còn conflict.
-- Không có secret hoặc dữ liệu nhạy cảm.
+- Không còn nhận xét blocking.
+- Không có xung đột.
+- Test liên quan đã chạy thành công.
+- Formatter và linter thành công.
+- Type checking thành công khi có.
+- Không có dữ liệu nhạy cảm.
+- Tài liệu đã được cập nhật khi cần.
 - Thay đổi đúng phạm vi.
+- Người tạo Pull Request đã kiểm tra lại diff cuối cùng.
 
-Với nhóm nhỏ, khuyến khích sử dụng:
+Ưu tiên `Squash and merge` đối với Pull Request có nhiều commit sửa review nhỏ.
 
-```text
-Squash and merge
-```
-
-Cách này giúp lịch sử `main` gọn hơn, mỗi Pull Request thường trở thành một commit chính.
-
-Có thể sử dụng `Merge commit` khi cần giữ toàn bộ lịch sử branch, nhưng nhóm cần thống nhất trước.
-
-Sau khi merge, branch đã hoàn thành có thể được xóa trên GitHub.
-
----
-
-## 16. Cập nhật main sau khi Pull Request được merge
-
-Sau khi một PR được merge:
-
-```bash
-git switch main
-git pull origin main
-```
-
-Xóa branch local đã hoàn thành:
-
-```bash
-git branch -d feature/TKB-010-upload-csv
-```
-
-Nếu Git từ chối xóa vì branch chưa được nhận diện là đã merge, kiểm tra kỹ trước khi dùng:
-
-```bash
-git branch -D feature/TKB-010-upload-csv
-```
-
-Không dùng `-D` khi chưa chắc chắn rằng thay đổi đã được merge hoặc không còn cần thiết.
-
----
-
-## 17. Cập nhật branch đang làm việc
-
-Nếu `main` có thay đổi mới trong khi bạn đang làm:
-
-```bash
-git switch main
-git pull origin main
-git switch feature/TKB-010-upload-csv
-git merge main
-```
-
-Hoặc sử dụng rebase nếu nhóm đã hiểu và thống nhất:
-
-```bash
-git rebase main
-```
-
-Trong giai đoạn đầu, nhóm có thể ưu tiên `merge main` vì dễ hiểu và ít rủi ro hơn.
-
-Không tự ý rebase branch của thành viên khác.
-
----
-
-## 18. Xử lý merge conflict
-
-Khi có conflict, Git sẽ đánh dấu:
-
-```text
-<<<<<<< HEAD
-Nội dung trên branch hiện tại
-=======
-Nội dung từ branch được merge
->>>>>>> main
-```
-
-Quy trình xử lý:
-
-1. Đọc cả hai phần thay đổi.
-2. Không xóa một phía theo cảm tính.
-3. Trao đổi với người đã sửa file nếu cần.
-4. Giữ lại nội dung đúng hoặc kết hợp hai phần.
-5. Xóa các dấu conflict.
-6. Lưu file.
-7. Chạy test.
-8. Add và commit.
+Commit squash cuối cùng nên có tên rõ ràng.
 
 Ví dụ:
 
-```bash
-git status
-git add path/to/conflicted-file
-git commit
+```text
+feat: add timetable CSV import
 ```
 
-Không sử dụng:
+Không merge một Pull Request chỉ vì:
 
-```bash
-git reset --hard
+- Đã tồn tại lâu.
+- Người thực hiện cần chuyển sang công việc khác.
+- Chỉ còn lỗi test nhỏ.
+- “Chạy được trên máy em”.
+- Không ai muốn review thêm.
+
+### 18.1. Sau khi merge
+
+Cập nhật máy cục bộ:
+
+```powershell
+git switch main
+git pull origin main
 ```
 
-chỉ để né conflict.
+Xóa branch cục bộ đã hoàn thành:
 
-Không dùng công cụ tự động chọn “Accept Current” hoặc “Accept Incoming” nếu chưa hiểu nội dung.
+```powershell
+git branch -d docs/TKB-003-update-contributing
+```
+
+Xóa branch từ xa nếu GitHub chưa tự xóa:
+
+```powershell
+git push origin --delete docs/TKB-003-update-contributing
+```
+
+Không tiếp tục dùng lại branch đã merge cho công việc mới.
 
 ---
 
-## 19. File không được commit
+## 19. Checklist trước khi hoàn thành
 
-Không commit:
+### 19.1. Checklist chung
+
+- [ ] Công việc đúng mục tiêu của branch.
+- [ ] Đã đọc URS và SRS liên quan.
+- [ ] Đã đọc các file `AGENTS.md` áp dụng.
+- [ ] Không mở rộng phạm vi ngoài yêu cầu.
+- [ ] Không có file thay đổi ngoài dự kiến.
+- [ ] Không có debug code.
+- [ ] Không có dữ liệu nhạy cảm.
+- [ ] Không có secret.
+- [ ] Đã kiểm tra `git diff`.
+- [ ] Commit message rõ ràng.
+
+### 19.2. Checklist nghiệp vụ
+
+- [ ] Thay đổi tuân theo URS và SRS mới nhất.
+- [ ] Không làm yếu ràng buộc cứng.
+- [ ] Thứ Bảy và Chủ nhật vẫn là ngày dạy hợp lệ.
+- [ ] Quyền Phòng đào tạo và Giảng viên vẫn chính xác.
+- [ ] Không thêm chức năng sinh viên ngoài phạm vi.
+- [ ] Phân công giảng viên vẫn là dữ liệu đầu vào cố định.
+- [ ] Sức chứa phòng vẫn là ràng buộc cứng.
+- [ ] Phòng lớn cho lớp nhỏ chỉ là cảnh báo hoặc điểm mềm.
+- [ ] Xung đột sử dụng khoảng tiết thực tế.
+- [ ] Ngày lễ không tự động biến thành buổi tạm ngưng.
+- [ ] Học bù không tự động tìm lịch rảnh của sinh viên.
+
+### 19.3. Checklist code
+
+- [ ] Code có kiểu dữ liệu rõ ràng.
+- [ ] Không có logic nghiệp vụ bị nhân bản.
+- [ ] Không có hàm quá lớn không cần thiết.
+- [ ] Không có mutable global state không kiểm soát.
+- [ ] Không có broad exception bị nuốt.
+- [ ] Thông báo lỗi có thể hành động được.
+- [ ] API kiểm tra quyền ở backend.
+- [ ] Frontend xử lý loading, empty và error.
+- [ ] Thuật toán độc lập với HTTP, ORM và CSV.
+
+### 19.4. Checklist test
+
+- [ ] Đã thêm hoặc cập nhật test.
+- [ ] Test mới thực sự kiểm tra hành vi.
+- [ ] Test cũ không bị xóa để che lỗi.
+- [ ] Test với seed cố định khi có ngẫu nhiên.
+- [ ] Test trường hợp thành công.
+- [ ] Test trường hợp thất bại.
+- [ ] Test biên.
+- [ ] Test phân quyền khi có liên quan.
+- [ ] Tất cả test liên quan đều chạy thành công.
+
+### 19.5. Checklist tài liệu và dữ liệu
+
+- [ ] URS/SRS đã cập nhật khi thay đổi nghiệp vụ.
+- [ ] README đã cập nhật khi thay đổi tổng quan.
+- [ ] AGENTS.md đã cập nhật khi thay đổi hướng dẫn.
+- [ ] CSV mẫu đã cập nhật khi thay đổi schema.
+- [ ] API contract đã được tài liệu hóa.
+- [ ] Đường dẫn tài liệu vẫn đúng.
+- [ ] Không có dữ liệu thật chưa được phép.
+
+### 19.6. Checklist Pull Request
+
+- [ ] Tiêu đề PR rõ ràng.
+- [ ] Có mô tả mục tiêu.
+- [ ] Có mô tả thay đổi.
+- [ ] Có hướng dẫn kiểm thử.
+- [ ] Có ảnh giao diện khi cần.
+- [ ] Có ghi ảnh hưởng đến tài liệu.
+- [ ] Có ghi breaking change khi có.
+- [ ] Đã tự review diff.
+- [ ] Đã yêu cầu thành viên khác review.
+
+---
+
+## 20. Các hành vi không được phép
+
+Không thực hiện các hành vi sau:
+
+- Push trực tiếp lên `main`.
+- Force push lên `main`.
+- Merge khi chưa review.
+- Commit bí mật hoặc dữ liệu riêng tư.
+- Xóa test để che lỗi.
+- Bỏ qua lỗi kiểm thử mà không giải thích.
+- Tự ý đổi ràng buộc cứng thành mềm.
+- Tự ý thêm chức năng sinh viên.
+- Tự ý thêm quy trình ngoài URS/SRS.
+- Để frontend là nơi duy nhất kiểm tra quyền.
+- Để thuật toán đọc trực tiếp CSV.
+- Để thuật toán truy cập database.
+- Dùng `slot_code` làm cách duy nhất để kiểm tra chồng thời gian.
+- Phạt Thứ Bảy hoặc Chủ nhật mặc định.
+- Khóa phòng lớn chỉ cho môn đại cương.
+- Cho phép phòng nhỏ hơn sĩ số chỉ bằng cảnh báo.
+- Thay đổi giảng viên đã phân công trong GA.
+- Tự động dời buổi ngày lễ mà không có yêu cầu.
+- Tự động tìm lịch rảnh của sinh viên.
+- Gộp nhiều công việc không liên quan vào một Pull Request.
+- Dùng commit message không có ý nghĩa.
+- Đưa file build hoặc file tạm vào repository.
+- Bỏ qua `AGENTS.md` gần nhất.
+- Tự suy diễn yêu cầu chưa được xác nhận.
+
+---
+
+## Tóm tắt quy trình
 
 ```text
-.env
-.env.local
-.env.production
-*.pem
-*.key
-credentials.json
-secret.json
-access-token.txt
-node_modules/
-.venv/
-__pycache__/
-dist/
-build/
-coverage/
-database dump có dữ liệu thật
-file cấu hình chứa mật khẩu
-dữ liệu cá nhân chưa được phép sử dụng
+1. Cập nhật main
+2. Tạo branch theo mã công việc
+3. Đọc URS, SRS và AGENTS.md
+4. Thực hiện thay đổi đúng phạm vi
+5. Thêm hoặc cập nhật test
+6. Chạy kiểm tra
+7. Xem lại git diff
+8. Commit rõ ràng
+9. Push branch
+10. Tạo Pull Request
+11. Review và sửa góp ý
+12. Merge khi mọi điều kiện đạt
+13. Cập nhật main và xóa branch cũ
 ```
 
-Danh sách cụ thể phải được cập nhật trong `.gitignore`.
-
-Nếu lỡ add một file chưa commit:
-
-```bash
-git restore --staged .env
-```
-
-Nếu file bí mật đã được commit hoặc push, phải báo ngay cho nhóm. Chỉ xóa file khỏi commit là chưa đủ; token hoặc mật khẩu phải được thay mới.
-
----
-
-## 20. Quản lý dependency
-
-Không thêm dependency tùy tiện.
-
-Trước khi thêm dependency lớn, cần giải thích:
-
-- Dependency giải quyết vấn đề gì?
-- Có thể dùng thư viện hiện có không?
-- Dependency có được duy trì không?
-- Có ảnh hưởng bảo mật không?
-- Có làm tăng độ phức tạp của dự án không?
-
-Sau khi thêm dependency:
-
-- Cập nhật file dependency.
-- Commit lock file phù hợp.
-- Cập nhật hướng dẫn cài đặt nếu cần.
-- Kiểm tra build và test.
-
-Không cài thư viện trên máy nhưng quên cập nhật file dependency.
-
----
-
-## 21. Database và migration
-
-Khi hệ thống database được thiết lập:
-
-- Mọi thay đổi schema phải đi qua migration.
-- Không yêu cầu thành viên sửa database bằng tay.
-- Không tự chỉnh sửa migration đã được dùng chung.
-- Tạo migration mới cho thay đổi tiếp theo.
-- Review kỹ migration có xóa dữ liệu hoặc cột hay không.
-- Các thao tác có nguy cơ mất dữ liệu cần được thảo luận trước.
-
-Pull Request có thay đổi database phải ghi rõ:
-
-- Bảng hoặc cột thay đổi.
-- Migration được thêm.
-- Cách chạy migration.
-- Có ảnh hưởng dữ liệu cũ hay không.
-
----
-
-## 22. Quy tắc tài liệu
-
-Khi thay đổi hành vi hệ thống, cần xem xét cập nhật:
-
-- `README.md`.
-- URS.
-- SRS.
-- Tài liệu API.
-- Tài liệu database.
-- Tài liệu thuật toán.
-- Hướng dẫn kiểm thử.
-
-Không mô tả một chức năng dự kiến như thể đã hoàn thành.
-
-Sử dụng rõ các trạng thái:
-
-- Dự kiến.
-- Đang phát triển.
-- Đã hoàn thành.
-- Cần xác nhận.
-
----
-
-## 23. Sử dụng Codex hoặc công cụ AI
-
-Có thể sử dụng Codex hoặc công cụ AI để hỗ trợ:
-
-- Phân tích Issue.
-- Đề xuất kế hoạch.
-- Viết code.
-- Viết test.
-- Review code.
-- Viết tài liệu.
-- Giải thích lỗi.
-
-Tuy nhiên, thành viên vẫn chịu trách nhiệm:
-
-- Đọc và hiểu code được tạo.
-- Kiểm tra code đúng yêu cầu.
-- Chạy test.
-- Kiểm tra bảo mật.
-- Không chấp nhận code chỉ vì AI tạo ra.
-- Không để AI tự phát minh nghiệp vụ.
-- Không đưa secret hoặc dữ liệu nhạy cảm vào prompt.
-
-Codex phải tuân theo các file `AGENTS.md` áp dụng cho thư mục đang làm việc.
-
----
-
-## 24. Các thao tác Git nguy hiểm
-
-Không chạy các lệnh sau khi chưa hiểu rõ và chưa được xác nhận:
-
-```bash
-git reset --hard
-git clean -fd
-git restore .
-git checkout -- .
-git push --force
-git branch -D <branch>
-```
-
-Các lệnh này có thể làm mất thay đổi.
-
-Khi gặp vấn đề Git, ưu tiên:
-
-1. Chạy `git status`.
-2. Chụp hoặc sao chép kết quả.
-3. Trao đổi với nhóm.
-4. Sao lưu file nếu cần.
-5. Chỉ chạy lệnh xử lý sau khi hiểu tác động.
-
----
-
-## 25. Quy tắc giao tiếp trong nhóm
-
-Khi bắt đầu một Issue:
-
-- Gán người phụ trách.
-- Thông báo trong nhóm.
-- Không để hai người cùng làm một Issue mà không phối hợp.
-
-Khi bị chặn:
-
-- Gắn trạng thái `blocked`.
-- Ghi rõ nguyên nhân.
-- Báo sớm thay vì chờ đến gần hạn.
-
-Khi phát hiện yêu cầu chưa rõ:
-
-- Đưa vào Issue.
-- Nêu các phương án.
-- Không tự quyết định rồi triển khai âm thầm.
-
-Khi thay đổi phạm vi:
-
-- Cập nhật Issue.
-- Cập nhật tài liệu liên quan.
-- Thống nhất với nhóm và giảng viên hướng dẫn nếu cần.
-
----
-
-## 26. Checklist trước khi mở Pull Request
-
-Trước khi mở PR, kiểm tra:
-
-```text
-[ ] Tôi đang ở đúng branch.
-[ ] Branch được tạo từ main tương đối mới.
-[ ] Thay đổi đúng phạm vi Issue.
-[ ] Không có file bí mật.
-[ ] Không có file tạm hoặc debug.
-[ ] Commit message rõ ràng.
-[ ] Code đã được kiểm tra.
-[ ] Test liên quan đã được chạy.
-[ ] Không làm hỏng test cũ.
-[ ] Tài liệu được cập nhật nếu cần.
-[ ] Pull Request có hướng dẫn kiểm thử.
-[ ] Các giả định và rủi ro đã được ghi rõ.
-```
-
----
-
-## 27. Checklist dành cho người review
-
-```text
-[ ] PR giải quyết đúng Issue.
-[ ] Acceptance criteria được đáp ứng.
-[ ] Không vượt phạm vi.
-[ ] Không tự thêm quy tắc nghiệp vụ.
-[ ] Không chứa secret.
-[ ] Có test phù hợp.
-[ ] Test kiểm tra cả trường hợp lỗi.
-[ ] Phân quyền được xử lý đúng.
-[ ] Không có thay đổi database nguy hiểm.
-[ ] Không có dependency không cần thiết.
-[ ] Code dễ hiểu.
-[ ] Không lặp logic.
-[ ] Tài liệu được cập nhật.
-[ ] Có thể merge an toàn.
-```
-
----
-
-## 28. Cập nhật tài liệu này
-
-`CONTRIBUTING.md` cần được cập nhật khi:
-
-- Quy trình Git thay đổi.
-- Nhóm thống nhất cách merge khác.
-- Có lệnh build hoặc test chính thức.
-- Có quy chuẩn code mới.
-- Có quy trình release.
-- Có lỗi lặp lại cần phòng tránh.
-
-Không thêm quy tắc chỉ áp dụng cho một Issue duy nhất.
-
-Quy tắc chuyên biệt nên được đặt trong:
-
-- `backend/AGENTS.md`.
-- `frontend/AGENTS.md`.
-- `backend/app/algorithms/genetic/AGENTS.md`.
-- Tài liệu tương ứng trong `docs/`.
-
----
-
-## 29. Nguyên tắc cuối cùng
-
-- Không code trực tiếp trên `main`.
-- Mỗi công việc dùng một branch.
-- Mỗi thay đổi quan trọng cần một Issue.
-- Mọi thay đổi phải đi qua Pull Request.
-- Một thành viên khác nên review.
-- Không merge khi test thất bại.
-- Không commit secret.
-- Không tự phát minh quy tắc nghiệp vụ.
-- Không dùng lệnh Git nguy hiểm khi chưa hiểu.
-- Chất lượng và khả năng kiểm tra quan trọng hơn việc hoàn thành thật nhanh.
+Mục tiêu của quy trình này không chỉ là tránh xung đột Git mà còn bảo đảm mã
+nguồn, tài liệu và nghiệp vụ của dự án luôn đồng bộ.

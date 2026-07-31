@@ -1,4 +1,6 @@
-room_code,room_name,capacity,room_type,campus_code,available
-A101,Phòng A101,60,LY_THUYET,CS1,true
-A102,Phòng A102,55,LY_THUYET,CS1,true
-LAB201,Phòng Lab 201,40,THUC_HANH,CS1,true
+room_code,room_name,capacity,room_type,room_size_category,available
+A303,Phòng A303,60,THEORY_ROOM,STANDARD,true
+B204,Phòng B204,55,THEORY_ROOM,STANDARD,true
+F201,Phòng F201,130,THEORY_ROOM,LARGE_HALL,true
+LAB301,Phòng LAB301,45,COMPUTER_LAB,STANDARD,true
+LAB401,Phòng LAB401,50,SPECIALIZED_LAB,STANDARD,true

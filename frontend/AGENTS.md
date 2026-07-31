@@ -1,1728 +1,1088 @@
-# Frontend AGENTS.md
+# Frontend Agent Instructions
 
 ## 1. Scope
 
-This file defines instructions for AI coding agents modifying files under:
+This file applies to every file inside the `frontend/` directory.
 
-```text
-frontend/
-```
+The repository-level `AGENTS.md` also applies. When an instruction in this
+file is more specific, follow this file for frontend implementation.
 
-It extends the repository-wide:
+The frontend is responsible for presenting information, collecting user input,
+calling backend APIs, and displaying validation results.
 
-```text
-/AGENTS.md
-```
+The frontend must not become the authoritative implementation of timetable
+business rules.
 
-All repository-wide rules remain active.
+The backend remains authoritative for:
 
-Before modifying frontend files, read:
-
-1. `/AGENTS.md`
-2. This file
-3. The assigned GitHub Issue
-4. Relevant URS and SRS sections
-5. Relevant API and UI documents
-6. Existing frontend code and tests
-
-Do not assume that every planned screen or component has already been
-implemented.
-
----
-
-## 2. Frontend responsibility
-
-The frontend provides the web user interface for the timetable scheduling
-system.
-
-It may be responsible for:
-
-- User authentication screens.
-- Role-aware navigation.
-- CSV upload interfaces.
-- Import preview and validation-error display.
-- Genetic Algorithm configuration forms.
-- Run-status and progress displays.
-- Timetable views by lecturer, room and course section.
-- Lecturer weekly timetable views.
-- Timetable adjustment-request forms.
-- Approval and rejection interfaces for authorized users.
-- Run-history and experiment-result screens.
-- CSV and Excel export actions.
-- Clear loading, empty, success and error states.
-
-The frontend is not the authoritative location for business rules.
-
-The backend must remain responsible for:
-
-- Authentication validation.
-- Authorization.
-- Data validation.
+- Authentication and authorization.
+- CSV validation.
+- Timetable generation.
+- Hard-constraint validation.
+- Soft-constraint scoring.
 - Conflict detection.
-- Hard-constraint enforcement.
-- Timetable validity.
-- Approval workflow enforcement.
-- Final export data.
-
-Frontend validation may improve user experience, but it must not replace
-backend validation.
+- Schedule-adjustment processing.
+- Schedule persistence.
+- Exported data.
 
 ---
 
-## 3. Current project state
+## 2. Supported Users
 
-The frontend may still be in the initialization stage.
+The application has two primary user roles:
 
-Do not assume that the following already exist:
+- `TRAINING_OFFICE`: Phòng đào tạo.
+- `LECTURER`: Giảng viên.
 
-- A React application.
-- TypeScript configuration.
-- Vite configuration.
-- Material UI.
-- Routing.
-- API client.
-- Authentication state.
-- Test tooling.
-- Lint configuration.
-- Formatting configuration.
-- Environment variables.
-- A finalized folder structure.
-- Reusable timetable components.
+Do not introduce a separate technical-administrator interface into the MVP
+unless the URS and SRS are formally updated.
 
-Inspect existing files before creating new ones.
+### Training Office
 
-Do not generate the complete planned frontend for a small Issue.
+The Training Office frontend may provide:
 
-Create only the files required for the current task.
-
----
-
-## 4. Expected technology
-
-The intended frontend stack is:
-
-- React.
-- TypeScript.
-- Vite.
-- Material UI.
-- A centralized HTTP client.
-- Appropriate React testing tools.
-- ESLint or equivalent lint tooling.
-- A formatter when formally configured.
-
-These technologies remain planned until the repository formally configures
-them.
-
-Do not replace React, TypeScript, Vite or Material UI without explicit
-approval.
-
-Do not introduce a large state-management, form, table or calendar library
-before demonstrating that the current project needs it.
-
-Before adding a dependency, explain:
-
-- What problem it solves.
-- Why existing tools are insufficient.
-- Its maintenance status.
-- Its bundle-size impact.
-- Its security implications.
-- Whether a simpler implementation is possible.
-
----
-
-## 5. Intended frontend structure
-
-The intended structure may resemble:
-
-```text
-frontend/
-├── public/
-├── src/
-│   ├── app/
-│   ├── assets/
-│   ├── components/
-│   ├── features/
-│   │   ├── auth/
-│   │   ├── imports/
-│   │   ├── algorithm/
-│   │   ├── timetables/
-│   │   ├── adjustments/
-│   │   └── run-history/
-│   ├── hooks/
-│   ├── layouts/
-│   ├── pages/
-│   ├── routes/
-│   ├── services/
-│   ├── types/
-│   ├── utils/
-│   ├── main.tsx
-│   └── vite-env.d.ts
-├── tests/
-├── AGENTS.md
-├── package.json
-├── tsconfig.json
-└── vite.config.ts
-```
-
-This is a direction, not a requirement to create all directories
-immediately.
-
-Create a directory only when the current Issue requires it.
-
-Avoid:
-
-- Empty feature folders.
-- Placeholder components with no use.
-- Generic abstractions created only for possible future requirements.
-- A single `components/` directory containing the entire application without
-  feature organization.
-
----
-
-## 6. Component responsibilities
-
-### 6.1. Pages
-
-Pages should:
-
-- Represent route-level screens.
-- Coordinate feature components.
-- Read route parameters.
-- Trigger page-level data loading.
-- Display page-level loading and error states.
-- Avoid containing large reusable UI implementations.
-
-Pages should not contain:
-
-- Complete API client implementations.
-- Database knowledge.
-- Scheduling algorithms.
-- Large repeated form logic.
-- Hard-coded permission decisions.
-
-### 6.2. Feature components
-
-Feature components should represent domain-specific interface sections.
-
-Examples:
-
-```text
-CsvUploadPanel
-ImportPreviewTable
-AlgorithmConfigurationForm
-TimetableWeekView
-RoomTimetableView
-LecturerScheduleCard
-AdjustmentRequestForm
-RunMetricsPanel
-ConflictList
-```
-
-Each component should have one clear responsibility.
-
-### 6.3. Shared components
-
-Shared components should be genuinely reusable.
-
-Examples:
-
-```text
-LoadingState
-EmptyState
-ErrorAlert
-ConfirmationDialog
-PageHeader
-StatusChip
-FormFieldError
-DataTable
-```
-
-Do not move a component into a shared directory after only one use unless its
-responsibility is clearly generic.
-
-### 6.4. Layouts
-
-Layouts may contain:
-
-- Application navigation.
-- Header.
-- Sidebar.
-- Role-aware menu items.
-- Main content area.
-- Shared responsive behavior.
-
-Layouts must not contain domain business logic.
-
----
-
-## 7. TypeScript rules
-
-Use TypeScript deliberately.
-
-Do not use `any` when the type can reasonably be known.
-
-Avoid:
-
-```typescript
-const data: any = response.data;
-```
-
-Prefer:
-
-```typescript
-const data: TimetableRunResponse = response.data;
-```
-
-### 7.1. Required domain types
-
-Define explicit types when relevant for:
-
-- User.
-- Role.
-- Lecturer.
-- Room.
-- Course section.
-- Time slot.
-- Timetable entry.
-- Import batch.
-- Import preview.
-- Validation error.
+- Sign-in and sign-out.
+- CSV upload, preview, validation, and import.
 - Genetic Algorithm configuration.
-- Genetic Algorithm run.
-- Fitness metrics.
-- Adjustment request.
-- Approval result.
-- API error.
-- Pagination metadata.
+- Genetic Algorithm execution.
+- Full timetable viewing.
+- Timetable candidate selection.
+- Direct schedule editing.
+- Schedule-segment editing.
+- Makeup-session creation.
+- Lecturer-request review.
+- Request approval or rejection.
+- Run history and change history.
+- CSV and Excel export.
 
-### 7.2. Request and response types
+### Lecturer
 
-Do not assume a request type and response type are identical.
+The Lecturer frontend may provide:
+
+- Sign-in and sign-out.
+- Personal weekly timetable.
+- Assigned course-section details.
+- Schedule-adjustment request creation.
+- Submitted-request history.
+- Request-status tracking.
+
+A lecturer must not be shown controls that allow them to:
+
+- Create or delete course sections.
+- Change the official timetable directly.
+- Edit another lecturer's timetable.
+- Approve or reject adjustment requests.
+- Change the primary lecturer of a course section.
+- Reject an assigned course section.
+
+Client-side permission checks improve user experience but are not sufficient
+security. The backend must enforce every protected operation.
+
+---
+
+## 3. User-Facing Language
+
+Use Vietnamese for user-facing application text.
+
+Use consistent terms:
+
+| Internal term       | User-facing Vietnamese   |
+| ------------------- | ------------------------ |
+| Training Office     | Phòng đào tạo            |
+| Lecturer            | Giảng viên               |
+| Course section      | Lớp học phần             |
+| Timetable           | Thời khóa biểu           |
+| Time slot           | Khung giờ / Ca học       |
+| Schedule segment    | Phân đoạn lịch           |
+| Makeup session      | Buổi học bù              |
+| Adjustment request  | Yêu cầu điều chỉnh lịch  |
+| Hard constraint     | Ràng buộc cứng           |
+| Soft constraint     | Ràng buộc mềm            |
+| Genetic Algorithm   | Thuật toán Di truyền     |
+| Candidate timetable | Phương án thời khóa biểu |
+| Theory              | Lý thuyết                |
+| Practice            | Thực hành                |
+| Integrated          | Lý thuyết – thực hành    |
+
+Do not display raw enum values such as `PENDING`, `INTEGRATED`,
+`TRAINING_OFFICE`, or `LARGE_HALL` directly to users.
+
+Centralize enum-to-label mappings.
 
 Example:
 
-```typescript
-interface CreateAdjustmentRequest {
-  timetableEntryId: string;
-  requestType: AdjustmentRequestType;
-  proposedSlotCode?: string;
-  proposedRoomCode?: string;
-  reason: string;
-}
-
-interface AdjustmentRequestResponse {
-  id: string;
-  status: AdjustmentRequestStatus;
-  createdAt: string;
-  reviewedAt: string | null;
-}
-```
-
-### 7.3. Union types and enums
-
-Use union types or enums for stable controlled values.
-
-Example:
-
-```typescript
-type AdjustmentRequestStatus =
-  | "PENDING"
-  | "APPROVED"
-  | "REJECTED"
-  | "CANCELLED"
-  | "APPLIED";
-```
-
-Do not compare status values using unexplained strings scattered across
-components.
-
-### 7.4. Null and optional values
-
-Handle nullable values explicitly.
-
-Do not assume:
-
-- Every API field is always present.
-- Every timetable has results.
-- Every request has been reviewed.
-- Every room has a campus value.
-- Every validation error has a row value.
-
-Avoid non-null assertions unless the invariant is proven.
+    const requestStatusLabels = {
+      PENDING: "Chờ duyệt",
+      APPROVED: "Đã phê duyệt",
+      REJECTED: "Bị từ chối",
+      CANCELLED: "Đã hủy",
+      APPLIED: "Đã áp dụng",
+    };
 
 ---
 
-## 8. Naming conventions
+## 4. Frontend Structure
 
-Use English for code identifiers.
+Organize frontend code by feature and responsibility.
 
-Use:
+A recommended structure is:
 
-```text
-TimetableWeekView
-AdjustmentRequestForm
-useCurrentUser
-fetchLecturerTimetable
-validationErrors
-selectedRoomCode
-```
+    frontend/
+    ├── src/
+    │   ├── api/
+    │   ├── app/
+    │   ├── components/
+    │   ├── features/
+    │   │   ├── auth/
+    │   │   ├── data-import/
+    │   │   ├── ga-runs/
+    │   │   ├── timetables/
+    │   │   ├── schedule-adjustments/
+    │   │   ├── lecturer-requests/
+    │   │   └── exports/
+    │   ├── hooks/
+    │   ├── layouts/
+    │   ├── pages/
+    │   ├── routes/
+    │   ├── types/
+    │   ├── utils/
+    │   └── validation/
+    └── tests/
 
-Avoid:
+Adapt the structure to the selected framework, but preserve separation between:
 
-```text
-LichGV
-formDoiLich
-data1
-tmp
-xuLyLoi
-```
+- API communication.
+- Domain and API types.
+- Reusable UI components.
+- Feature-specific state and logic.
+- Page composition.
+- Routing and authorization.
+- Formatting and display utilities.
 
-User-facing text may be Vietnamese.
-
-Use consistent naming:
-
-- Components: `PascalCase`.
-- Hooks: `useSomething`.
-- Variables and functions: `camelCase`.
-- Constants: follow the established project convention.
-- Type names: `PascalCase`.
-- File names: follow one consistent project convention.
-
-Do not mix multiple naming conventions within the same feature.
-
----
-
-## 9. React component rules
-
-### 9.1. One clear responsibility
-
-A component should focus on one responsibility.
-
-Do not create a page component that simultaneously:
-
-- Fetches all application data.
-- Handles authentication.
-- Validates CSV.
-- Renders the timetable.
-- Manages modal state.
-- Exports Excel.
-- Calculates business rules.
-
-Split responsibilities when the component becomes difficult to understand or
-test.
-
-### 9.2. Props
-
-Use explicit props.
-
-Prefer:
-
-```typescript
-interface TimetableEntryCardProps {
-  entry: TimetableEntry;
-  canRequestAdjustment: boolean;
-  onRequestAdjustment: (entryId: string) => void;
-}
-```
-
-Avoid generic props such as:
-
-```typescript
-interface Props {
-  data: any;
-  config: any;
-}
-```
-
-### 9.3. Derived state
-
-Do not store values in state when they can be derived safely from existing
-state or props.
-
-Avoid duplicated sources of truth.
-
-For example, do not store both:
-
-```text
-selectedRoom
-selectedRoomCode
-```
-
-unless both are independently required and synchronized deliberately.
-
-### 9.4. Effects
-
-Use effects for external synchronization, not for ordinary value
-calculation.
-
-An effect must have:
-
-- A clear purpose.
-- Correct dependencies.
-- Cleanup when required.
-- Protection against stale asynchronous results when relevant.
-
-Do not use effects to manually reproduce ordinary rendering behavior.
-
-### 9.5. Keys
-
-Use stable identifiers as React keys.
-
-Prefer:
-
-```tsx
-{
-  entries.map((entry) => <TimetableEntryCard key={entry.id} entry={entry} />);
-}
-```
-
-Avoid using array indexes when list order or identity may change.
-
-### 9.6. Conditional rendering
-
-Make permission and state conditions understandable.
-
-Avoid deeply nested ternary expressions.
-
-Prefer named conditions or separate components.
+Do not create one large component that contains an entire workflow.
 
 ---
 
-## 10. Hooks
+## 5. API Communication
 
-Custom hooks should package reusable stateful behavior.
+Centralize backend communication in the API layer.
 
-Possible hooks:
+Do not call `fetch`, `axios`, or another HTTP client directly from many
+unrelated components.
 
-```text
-useCurrentUser
-usePermissions
-useImportPreview
-useTimetableFilters
-useAlgorithmRun
-useAdjustmentRequests
-```
+Use clearly named API functions such as:
 
-A hook should not hide large, unrelated workflows.
+- `uploadCsvFile`
+- `previewCsvFile`
+- `confirmCsvImport`
+- `startGaRun`
+- `getGaRunStatus`
+- `getTimetableByLecturer`
+- `getTimetableByRoom`
+- `getTimetableByCourseSection`
+- `validateScheduleChange`
+- `applyDirectScheduleChange`
+- `createAdjustmentRequest`
+- `approveAdjustmentRequest`
+- `rejectAdjustmentRequest`
+- `createMakeupSession`
+- `exportTimetable`
 
-Do not create a custom hook merely to wrap a single `useState` without adding
-meaningful behavior.
+Every API workflow must handle:
 
-Hooks that call APIs must expose relevant states, such as:
+- Initial state.
+- Loading state.
+- Successful response.
+- Empty result.
+- Validation errors.
+- Authentication errors.
+- Authorization errors.
+- Network failures.
+- Unexpected server errors.
 
-```typescript
-{
-  (data, isLoading, error, refetch);
-}
-```
+Do not silently ignore failed requests.
 
-The exact shape should follow the selected data-fetching approach.
+Display structured error messages returned by the backend.
+
+Do not infer complex business conclusions from HTTP status codes alone.
 
 ---
 
-## 11. API client rules
+## 6. Type Safety
 
-All HTTP calls should go through a centralized service or API client.
+Define explicit types for API contracts and important domain objects.
 
-Do not scatter code such as:
+Examples:
 
-```typescript
-fetch("http://localhost:8000/api/...");
-```
+    type UserRole =
+      | "TRAINING_OFFICE"
+      | "LECTURER";
 
-across components.
+    type CourseType =
+      | "THEORY"
+      | "PRACTICE"
+      | "INTEGRATED";
 
-A preferred structure may include:
+    type RequestStatus =
+      | "PENDING"
+      | "APPROVED"
+      | "REJECTED"
+      | "CANCELLED"
+      | "APPLIED";
 
-```text
-src/services/apiClient.ts
-src/features/imports/importApi.ts
-src/features/timetables/timetableApi.ts
-src/features/adjustments/adjustmentApi.ts
-```
+    type TimetableStatus =
+      | "DRAFT"
+      | "PUBLISHED"
+      | "IN_PROGRESS"
+      | "COMPLETED"
+      | "ARCHIVED";
 
-### 11.1. Base URL
+    type AdjustmentScope =
+      | "ONLY_THIS_SESSION"
+      | "DATE_RANGE"
+      | "FROM_THIS_DATE"
+      | "ENTIRE_COURSE";
 
-The API base URL must come from environment configuration.
+Avoid `any` for API responses.
 
-Example:
+Use `unknown` and validate data when an external response has not yet been
+verified.
 
-```typescript
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-```
+Do not copy backend database models directly when the frontend only needs a
+smaller API view model.
 
-Do not hard-code machine-specific addresses in feature components.
+Centralize shared enums and labels instead of duplicating strings across pages.
 
-### 11.2. Authentication
+---
 
-Token or session handling must be centralized.
+## 7. Authentication and Protected Routes
+
+Protected pages must require an authenticated session.
+
+Role-specific pages must verify the current user's role.
+
+Recommended route groups:
+
+    /training-office/*
+    /lecturer/*
+
+When the session expires:
+
+- Clear authenticated frontend state.
+- Redirect to the login page.
+- Display a clear Vietnamese message when appropriate.
 
 Do not:
 
-- Append authentication headers manually in many files.
-- Log complete tokens.
-- Put backend secrets in frontend environment variables.
-- Treat `VITE_` variables as private secrets.
-
-Any value embedded in the frontend bundle can potentially be viewed by the
-client.
-
-### 11.3. Error conversion
-
-Convert backend errors into a consistent frontend error model.
-
-Example:
-
-```typescript
-interface ApiError {
-  code: string;
-  message: string;
-  details?: ApiErrorDetail[];
-  status?: number;
-}
-```
-
-Do not force every component to understand raw HTTP-library exceptions.
-
-### 11.4. Request cancellation
-
-For requests that may become obsolete, consider cancellation or stale-result
-protection.
-
-Examples:
-
-- Timetable filtering.
-- Search input.
-- Switching between runs.
-- Leaving a page while data is loading.
-
-Do not update unmounted or outdated views with stale request results.
+- Store plaintext passwords.
+- Commit credentials.
+- Print tokens to the browser console.
+- Include private API keys in frontend source code.
+- Assume that hiding a button provides authorization.
 
 ---
 
-## 12. Authentication and authorization UI
+## 8. Navigation
 
-The frontend may:
+Navigation must reflect the current role.
 
-- Show role-appropriate navigation.
-- Hide unauthorized actions.
-- Disable actions that are not currently permitted.
-- Redirect unauthenticated users.
-- Display an access-denied page.
+### Training Office navigation
 
-The frontend must not be treated as the final authorization layer.
+Recommended items:
 
-The backend must verify every protected action.
+- Tổng quan
+- Nhập dữ liệu
+- Cấu hình thuật toán
+- Thực hiện xếp lịch
+- Kết quả thời khóa biểu
+- Điều chỉnh lịch
+- Yêu cầu từ giảng viên
+- Lịch sử chạy
+- Xuất dữ liệu
 
-### 12.1. Role handling
+### Lecturer navigation
 
-Role values should be centralized.
+Recommended items:
 
-Do not scatter string comparisons such as:
+- Lịch giảng dạy của tôi
+- Lớp học phần được phân công
+- Gửi yêu cầu điều chỉnh
+- Yêu cầu đã gửi
 
-```typescript
-user.role === "admin";
-```
-
-throughout the application.
-
-Use a permission helper or established authorization utility.
-
-Example:
-
-```typescript
-canApproveAdjustment(currentUser);
-```
-
-### 12.2. Unauthorized responses
-
-Handle:
-
-- `401 Unauthorized`.
-- `403 Forbidden`.
-
-Expected behavior may include:
-
-- Clearing invalid local authentication state.
-- Redirecting to login.
-- Displaying access denied.
-- Preserving a safe return location when appropriate.
-
-Do not create infinite redirect loops.
+Do not show unauthorized modules merely as disabled items unless the interface
+must explicitly explain why access is unavailable.
 
 ---
 
-## 13. Forms
+## 9. CSV Upload
 
-Forms may include:
+The CSV import interface should support:
 
-- Login.
-- CSV upload.
-- Algorithm configuration.
-- Adjustment request.
-- Approval or rejection.
-- Timetable filtering.
+1. Selecting a data category.
+2. Selecting a CSV file.
+3. Uploading or parsing the file.
+4. Displaying column headers.
+5. Displaying preview rows.
+6. Displaying validation results.
+7. Confirming or cancelling the import.
 
-### 13.1. Validation
+Possible data categories include:
 
-Frontend validation should cover immediate user feedback, such as:
+- Giảng viên.
+- Nguyện vọng giảng viên.
+- Phân công giảng dạy.
+- Lớp học phần.
+- Phòng học.
+- Khung giờ.
+- Lịch học kỳ.
+- Thời gian phòng không sử dụng.
+- Phân đoạn lịch, when supported.
 
-- Required fields.
-- Number ranges.
-- File presence.
-- Supported extension.
-- Text length.
-- Percentage limits.
-- Missing reason.
+Validation errors should display:
 
-The backend remains authoritative.
+- File name.
+- Row number.
+- Column name.
+- Invalid value.
+- Error reason.
 
-Do not duplicate complex scheduling rules inside frontend forms.
+Do not display only a generic message such as:
 
-### 13.2. Submission states
+    Dữ liệu không hợp lệ.
 
-Every form submission should consider:
+Provide actionable details, for example:
 
-- Idle.
-- Submitting.
-- Success.
-- Validation failure.
-- Server failure.
-- Unauthorized response.
+    Dòng 14, cột room_code:
+    Không tìm thấy phòng có mã F205.
 
-Disable duplicate submission while a request is pending when appropriate.
+The frontend may perform basic validation for convenience, but backend
+validation remains authoritative.
 
-Do not leave the user unsure whether the request was submitted.
+The project CSV convention is:
 
-### 13.3. Server-side field errors
-
-Map backend validation details to relevant fields or rows when possible.
-
-For CSV errors, display:
-
-- Row.
-- Column.
-- Value.
-- Error code or message.
-
-Do not collapse a detailed backend validation report into one generic toast.
+- UTF-8 encoding.
+- Comma-separated values.
+- One header row.
+- Documented and stable column names.
+- One documented date format.
 
 ---
 
-## 14. CSV upload interface
+## 10. Genetic Algorithm Configuration
 
-The CSV upload screen should support relevant states:
-
-- No file selected.
-- File selected.
-- Uploading.
-- Parsing.
-- Preview available.
-- Validation errors.
-- Ready for confirmation.
-- Import completed.
-- Import failed.
-
-### 14.1. File handling
-
-The frontend may validate:
-
-- File extension.
-- File size.
-- Whether a file was selected.
-
-It must not claim that the content is valid until the backend validates it.
-
-### 14.2. Preview
-
-The preview should:
-
-- Display headers.
-- Display representative rows.
-- Support long content safely.
-- Clearly mark invalid cells or rows when data is available.
-- Avoid rendering an unbounded number of rows at once.
-
-### 14.3. Error report
-
-Validation errors should be understandable and navigable.
-
-Consider:
-
-- Filtering by error type.
-- Highlighting row and column.
-- Showing the original value.
-- Downloading an error report if the backend supports it.
-
-Do not hide errors merely to simplify the table.
-
----
-
-## 15. Genetic Algorithm configuration UI
-
-Configuration fields may include:
+The GA configuration screen should support at least:
 
 - Population size.
 - Number of generations.
-- Mutation rate.
 - Crossover rate.
-- Selection method.
-- Elitism.
-- Random seed.
-- Stopping criteria.
+- Mutation rate.
 - Soft-constraint weights.
 
-### 15.1. Numeric validation
+It may also support:
 
-Validate numeric fields clearly.
+- Execution time limit.
+- Random seed.
+- Number of generations without improvement.
 
-Examples:
+Use appropriate form controls:
 
-- Population size must be positive.
-- Generation count must be positive.
-- Rates must be between `0` and `1`.
-- Elitism must not exceed population limits.
-- Weights must not be negative unless explicitly allowed.
+- Integer input for counts.
+- Decimal input or slider for rates.
+- Clear minimum and maximum values.
+- Labels and explanations.
 
-Do not silently clamp invalid values unless the product requirement specifies
-that behavior.
+Example:
 
-### 15.2. Advanced settings
+    Tỷ lệ đột biến
+    Giá trị hợp lệ từ 0 đến 1.
 
-Do not overwhelm users with every experimental parameter on the default
-screen.
+Prevent obviously invalid submissions in the interface.
 
-When appropriate, separate:
+Still display backend validation errors because frontend validation is not
+authoritative.
 
-- Basic settings.
-- Advanced settings.
-
-Display useful descriptions for technical terms.
-
-### 15.3. Run submission
-
-Before starting a run, show:
-
-- Selected data batch.
-- Main parameter values.
-- Confirmation when the run may take significant time.
-
-Prevent accidental duplicate run requests.
+Do not hardcode one parameter configuration as universally optimal.
 
 ---
 
-## 16. Algorithm run status
+## 11. GA Run Status
 
-The run-status UI may display:
+A GA run may have states such as:
 
-- Queued.
-- Running.
-- Completed.
-- Failed.
-- Cancelled if supported.
-- Progress information when available.
-- Current generation when available.
-- Best fitness.
-- Hard-violation count.
+- Chờ chạy.
+- Đang chạy.
+- Hoàn thành.
+- Thất bại.
+- Đã dừng.
+
+The interface should display, when available:
+
+- Run identifier.
+- Selected input-data version.
+- Start time.
+- End time.
+- Current status.
+- Best fitness or cost.
+- Number of hard violations.
+- Soft-constraint score.
+- Current or final generation.
 - Execution time.
+- Failure reason.
+- Random seed.
 
-Do not invent progress percentages when the backend does not provide reliable
-progress information.
+Do not display a fake progress percentage when the backend cannot calculate
+meaningful progress.
 
-If only run status is available, display status honestly.
+Use a spinner and a message such as `Đang thực hiện xếp lịch` instead.
 
-Polling must:
-
-- Use a reasonable interval.
-- Stop when the run reaches a terminal state.
-- Stop when the component unmounts.
-- Handle temporary errors.
-- Avoid creating multiple simultaneous polling loops.
-
-Do not add WebSocket infrastructure unless the project explicitly adopts it.
+When a safely stopped run contains a best-so-far result, keep that result
+visible.
 
 ---
 
-## 17. Timetable views
+## 12. Timetable Views
 
-The system should support timetable views by:
+The frontend must support timetable views by:
 
 - Lecturer.
 - Room.
 - Course section.
 
-Lecturers should be able to view their own timetable by week.
+Lecturers must have a personal weekly view.
 
-### 17.1. Timetable entry display
-
-A timetable entry may display:
+A timetable item should show:
 
 - Course name.
-- Course code.
-- Section code.
-- Lecturer.
-- Room.
-- Day.
+- Course-section code.
+- Lecturer, when relevant.
+- Date or effective date range.
+- Day of week.
 - Start period.
 - End period.
-- Week.
-- Status.
-
-Do not rely on color alone to communicate status.
-
-### 17.2. Weekly view
-
-A weekly timetable should clearly represent:
-
-- Monday through Sunday when required.
-- Morning, afternoon and evening periods.
-- Empty time slots.
-- Overlapping or invalid states when the backend reports them.
-- Current or selected week.
-- Entry details.
-
-Do not assume every session is exactly the same duration unless the confirmed
-requirements guarantee it.
-
-### 17.3. Filters
-
-Filters may include:
-
-- Lecturer.
 - Room.
-- Course section.
-- Week.
-- Day.
-- Session type.
-- Status.
+- Course type.
+- Session status.
 
-Filter state should be predictable.
+Do not rely only on color.
 
-When filter state is stored in the URL, use clear query parameter names.
+Use labels or icons together with color for statuses such as:
 
-Do not send a request on every keystroke without debouncing when search traffic
-could become excessive.
+- Bình thường.
+- Học bù.
+- Tạm ngưng.
+- Đã chuyển.
+- Ngoại lệ một buổi.
 
-### 17.4. Large timetables
+The frontend must handle approximately:
 
-For large datasets, consider:
+- 20 lecturers.
+- 100–200 course sections.
+- About 1,500–3,000 dated session occurrences.
 
-- Pagination.
-- Virtualization.
-- Server-side filtering.
-- Collapsible groups.
-- Limited default ranges.
-
-Do not introduce complex optimization until a real rendering problem is
-measured.
+Do not load every occurrence when the user only needs one week or one filter.
 
 ---
 
-## 18. Timetable adjustments
+## 13. Teaching Days and Time Slots
 
-Adjustment actions may include:
+Monday through Sunday are valid teaching days.
 
-- Suspend one session.
-- Move one session.
-- Change room.
-- Move an entire recurring schedule when allowed.
+Do not mark Saturday or Sunday as invalid.
 
-The frontend must clearly distinguish:
+Saturday, Sunday, and evening classes may be shown as less preferred only when
+the active GA configuration applies the relevant soft weight and the lecturer
+has not explicitly preferred that day or slot. They must not be shown as errors.
 
-- Requested change.
-- Approved change.
-- Rejected change.
-- Applied change.
-- Current effective timetable.
+The interface may visually distinguish weekends, but weekend classes are
+normal valid classes.
 
-### 18.1. Request form
+Display time slots consistently, for example:
 
-The form should display:
+- Tiết 1–3
+- Tiết 4–6
+- Tiết 7–9
+- Tiết 10–12
+- Tiết 13–15
+- Tiết 1–5
+- Tiết 1–6
+- Tiết 2–6
 
-- Current timetable entry.
+Do not assume all time slots contain three periods.
+
+Never allow the interface to construct arbitrary invalid ranges such as
+periods 3–9.
+
+Only allow configured backend time slots.
+
+---
+
+## 14. Course Types
+
+Supported course types are:
+
+- `THEORY`: Lý thuyết.
+- `PRACTICE`: Thực hành.
+- `INTEGRATED`: Lý thuyết – thực hành.
+
+An integrated course section:
+
+- Is displayed as one course section.
+- Has one primary lecturer.
+- Uses one five-period or six-period session.
+- Must not be displayed as separate theory and practice timetable entries.
+
+Display the required room type separately from the course type.
+
+Example:
+
+    Loại lớp: Lý thuyết – thực hành
+    Loại phòng yêu cầu: Phòng máy
+
+Do not assume every integrated course requires a computer laboratory.
+
+The required room type must come from the course-section data.
+
+---
+
+## 15. Lecturer Relationships
+
+The frontend must represent the approved teaching-assignment model correctly.
+
+- Each course section has one primary lecturer.
+- One lecturer may teach multiple course sections.
+- One lecturer may teach multiple sections of the same course.
+- One lecturer may teach different courses in the same semester.
+- A lecturer may teach consecutive sessions.
+- A lecturer must not have overlapping sessions.
+
+Do not display language implying that a lecturer may teach only one class or
+one course.
+
+The frontend does not assign lecturers to courses. Teaching assignments are
+provided as input data before timetable generation.
+
+---
+
+## 16. Room Selection
+
+When displaying or selecting a room, show:
+
+- Room code.
+- Room name.
+- Room type.
+- Capacity.
+- Availability status.
+
+The interface must distinguish between hard errors and soft warnings.
+
+### Hard error example
+
+    Không thể chọn phòng A301.
+    Sức chứa phòng là 40 nhưng sĩ số dùng để xếp lịch là 55.
+
+### Soft warning example
+
+    Phòng F201 có sức chứa 130, lớn hơn đáng kể so với sĩ số lớp là 50.
+    Phòng này vẫn có thể được sử dụng nếu Phòng đào tạo xác nhận.
+
+Do not block the Training Office from selecting a large room when:
+
+- The room is available.
+- The room type is compatible.
+- The room has sufficient capacity.
+- No hard conflict exists.
+
+Large rooms should normally be preserved for large classes or used when
+standard rooms are unavailable, but this is a soft preference.
+
+Do not add room-to-course restrictions unless they exist in input data.
+
+Do not add a travel-time warning between rooms or buildings.
+
+---
+
+## 17. Academic Calendar and Holidays
+
+The timetable uses actual dates and an academic-calendar mapping.
+
+The frontend may display:
+
+- Semester start date.
+- Semester end date.
+- Academic week.
+- Teaching dates.
+- Holidays.
+- Non-teaching dates.
+
+When a regular class falls on a holiday:
+
+- Do not display a normal session occurrence.
+- Do not automatically display `Tạm ngưng`.
+- The calendar may show an empty date or a holiday marker.
+- The course-section detail may show that one session still needs to be made up.
+
+Example:
+
+    Số buổi yêu cầu: 15
+    Số buổi đã xếp: 14
+    Số buổi cần bù: 1
+
+Do not automatically move a holiday session to the next week in frontend code.
+
+---
+
+## 18. Schedule Segments
+
+A course section may use different rooms or schedules in different date ranges.
+
+Example:
+
+    01/09/2026–15/10/2026
+    Thứ Hai, tiết 1–3, phòng A303
+
+    16/10/2026–20/12/2026
+    Thứ Hai, tiết 1–3, phòng F201
+
+The interface should clearly display every segment's:
+
+- Effective start date.
+- Effective end date.
+- Day of week.
+- Time slot.
+- Room.
+
+When editing a repeating schedule, the Training Office should select an
+adjustment scope:
+
+- Chỉ buổi này.
+- Trong khoảng ngày được chọn.
+- Từ ngày này đến hết học phần.
+- Toàn bộ lịch cố định.
+
+Display the selected scope clearly before confirmation.
+
+Do not modify all occurrences when the user selected only one occurrence.
+
+Do not independently implement segment-splitting rules in multiple components.
+Use backend APIs and shared frontend utilities.
+
+---
+
+## 19. Direct Schedule Adjustment
+
+The Training Office may directly edit the official timetable after receiving
+information outside the system.
+
+The adjustment form may include:
+
+- Course section.
+- Current session or segment.
+- Adjustment scope.
+- New date.
+- New time slot.
+- New room.
+- Reason.
+- Notes.
+
+Before applying a change:
+
+1. Send the proposed change to the backend for validation.
+2. Display hard conflicts.
+3. Display soft warnings separately.
+4. Require confirmation.
+5. Apply only after the backend accepts the change.
+
+Do not reproduce the complete conflict-validation engine in frontend code.
+
+A hard conflict must prevent confirmation.
+
+A soft warning may allow the Training Office to confirm the change.
+
+---
+
+## 20. Lecturer Adjustment Requests
+
+A lecturer may submit an adjustment request for one of their assigned course
+sections.
+
+Possible request types include:
+
+- Tạm ngưng một buổi.
+- Chuyển một buổi.
+- Đổi phòng.
+- Đề nghị đổi lịch.
+- Đề xuất buổi học bù.
+
+The request form should include:
+
+- Course section.
+- Affected session or date range.
 - Request type.
 - Reason.
-- Proposed time slot when relevant.
-- Proposed room when relevant.
-- Confirmation before submission.
+- Optional proposed date.
+- Optional proposed time slot.
+- Optional proposed room.
 
-Do not allow a lecturer to select unrelated course sections through frontend
-state.
+After submission:
 
-The backend must still verify ownership.
+- Show the request identifier.
+- Show status `Chờ duyệt`.
+- Do not change the official timetable.
+- Allow the lecturer to view request history.
+- Allow cancellation only when the backend permits it.
 
-### 18.2. Conflict responses
+The application does not need to find a time when every student is free.
 
-When the backend rejects a change because of conflicts, show useful details.
+Do not add:
 
-Examples:
-
-- Lecturer conflict.
-- Room conflict.
-- Invalid room type.
-- Room capacity violation.
-- Lecturer unavailable.
-- Room unavailable.
-- Invalid slot.
-
-Do not show only:
-
-```text
-Không thể thay đổi lịch.
-```
-
-when structured details are available.
-
-### 18.3. Approval screen
-
-Authorized users should be able to:
-
-- View the request.
-- Compare the current and proposed schedule.
-- View conflict-check results.
-- Approve.
-- Reject with a reason.
-- See processing state.
-
-Destructive or irreversible actions should require confirmation.
+- Student selection.
+- Student availability checking.
+- Student timetable comparison.
+- Automatic scheduling negotiations.
 
 ---
 
-## 19. Loading, empty, error and success states
+## 21. Request Review
 
-Every data-driven page must consider four minimum states:
+The Training Office request-review page should show:
 
-1. Loading.
-2. Error.
-3. Empty.
-4. Success.
+- Lecturer.
+- Course section.
+- Current timetable.
+- Requested change.
+- Reason.
+- Submission time.
+- Validation result.
+- Hard conflicts.
+- Soft warnings.
+- Processing history.
 
-### 19.1. Loading
+Available actions may include:
 
-Use an appropriate loading indicator.
+- Phê duyệt.
+- Điều chỉnh phương án rồi áp dụng.
+- Từ chối.
+- Ghi chú xử lý.
 
-Do not show stale content as current without indicating refresh behavior.
+Do not allow approval before backend validation information is available.
 
-Avoid blocking the entire application for a small local request.
+When rejecting a request, require a reason or clearly prompt for one.
 
-### 19.2. Empty
+Use consistent request statuses:
 
-Empty state text should explain:
-
-- Why there may be no data.
-- What the user can do next.
-- Whether filters are active.
-
-Examples:
-
-```text
-Chưa có lần chạy thuật toán nào.
-```
-
-```text
-Không tìm thấy lịch phù hợp với bộ lọc hiện tại.
-```
-
-### 19.3. Error
-
-Show actionable messages where possible.
-
-Differentiate:
-
-- Network error.
-- Validation error.
-- Unauthorized.
-- Forbidden.
-- Not found.
-- Conflict.
-- Unexpected server error.
-
-Provide retry actions when safe.
-
-### 19.4. Success
-
-Use success messages for completed user actions, such as:
-
-- Import confirmed.
-- Adjustment request submitted.
-- Request approved.
-- File export started.
-
-Do not show repeated success toasts for background refreshes.
+- `PENDING`: Chờ duyệt.
+- `APPROVED`: Đã phê duyệt.
+- `REJECTED`: Bị từ chối.
+- `CANCELLED`: Đã hủy.
+- `APPLIED`: Đã áp dụng.
 
 ---
 
-## 20. User feedback and notifications
+## 22. Makeup Sessions
 
-Use a consistent notification approach.
+The Training Office may manually create a makeup session.
 
-Notifications should:
+The form may include:
 
-- Be concise.
-- Explain the result.
-- Avoid exposing internal error details.
-- Avoid disappearing before the user can understand critical failures.
-- Not be the only place where field-level validation is shown.
+- Course section.
+- Original missed or suspended session.
+- Makeup date.
+- Time slot.
+- Room.
+- Reason.
+- Notes.
 
-Use inline errors for form fields and detailed validation tables.
+The frontend must send the proposed session to the backend for conflict
+validation before applying it.
 
-Use notifications for overall operation outcomes.
+The frontend must not automatically choose a date based on student
+availability.
 
----
-
-## 21. Styling and Material UI
-
-When Material UI is adopted:
-
-- Use the theme rather than scattering arbitrary values.
-- Use consistent spacing.
-- Use semantic variants.
-- Avoid deeply nested inline style objects.
-- Reuse common visual patterns.
-- Keep responsive behavior intentional.
-
-Do not create a custom design system before the project needs one.
-
-Avoid hard-coded colors for domain meaning without theme support.
-
-Status colors should be accompanied by text or icons.
-
-### 21.1. Responsive behavior
-
-Primary screens should remain usable on common laptop and desktop widths.
-
-Mobile optimization is not the main scope, but the interface should avoid
-unnecessary breakage on narrower screens.
-
-Tables may use:
-
-- Horizontal scrolling.
-- Responsive columns.
-- Detail dialogs.
-- Stacked layouts.
-
-Do not shrink important text to unreadable sizes to fit wide tables.
+Display the relationship between the makeup session and the missed session
+when that information is available.
 
 ---
 
-## 22. Accessibility
+## 23. Forms
 
-Frontend changes should consider accessibility.
+Every form should:
 
-Minimum expectations:
+- Use visible labels.
+- Mark required fields.
+- Preserve entered values after validation errors.
+- Display field errors near the relevant input.
+- Prevent duplicate submission while processing.
+- Clearly distinguish primary, secondary, and destructive actions.
 
-- Form controls have labels.
-- Buttons have understandable names.
-- Icons used as buttons have accessible labels.
-- Keyboard focus remains visible.
-- Dialogs manage focus appropriately.
-- Error messages are associated with fields.
-- Tables use meaningful headers.
-- Color is not the only status indicator.
-- Interactive elements are reachable by keyboard.
-- Text contrast is sufficient.
+Do not use placeholder text as the only field label.
 
-Use semantic HTML where possible.
+Significant actions should require confirmation, including:
 
-Do not turn a non-interactive `<div>` into a button without keyboard and
-accessibility behavior.
-
----
-
-## 23. Date, time and academic-week handling
-
-Date and time handling must be centralized and explicit.
-
-Do not compare localized date strings.
-
-Use stable machine-readable values from the API.
-
-Display Vietnamese labels separately from stored values.
-
-Examples:
-
-```text
-MONDAY -> Thứ Hai
-MORNING -> Sáng
-PENDING -> Chờ duyệt
-```
-
-### 23.1. Time zones
-
-Do not assume browser-local time is always the intended academic time zone.
-
-When timestamps are returned by the backend:
-
-- Preserve their offset or timezone meaning.
-- Format them consistently.
-- Document whether values are UTC or local.
-
-### 23.2. Periods and slots
-
-Do not assume:
-
-- All sessions begin at period 1.
-- Every class uses exactly three periods.
-- Every week has the same available slots.
-
-Use backend-provided slot definitions.
-
-### 23.3. Week selection
-
-A timetable week selector should use a stable week identifier.
-
-Do not derive academic-week identity only from the displayed date without
-confirmed rules.
+- Applying a timetable candidate.
+- Replacing an official schedule.
+- Applying a direct schedule change.
+- Approving a lecturer request.
+- Rejecting a lecturer request.
+- Cancelling an active GA run.
+- Overwriting imported data.
 
 ---
 
-## 24. Internationalization and user-facing text
+## 24. Loading, Empty, and Error States
 
-The primary interface language is expected to be Vietnamese.
+Every data-driven screen must define:
 
-Keep user-facing terminology consistent.
+- Initial state.
+- Loading state.
+- Success state.
+- Empty state.
+- Validation-error state.
+- Authorization-error state.
+- Server-error state.
 
-Examples:
+Useful empty messages include:
 
-- “Phòng đào tạo”.
-- “Giảng viên”.
-- “Lớp học phần”.
-- “Khung thời gian”.
-- “Ràng buộc cứng”.
-- “Ràng buộc mềm”.
-- “Yêu cầu điều chỉnh”.
+    Chưa có lần chạy thuật toán nào.
 
-Do not mix different Vietnamese translations for the same domain concept
-without reason.
+    Giảng viên chưa có lịch trong tuần này.
 
-Avoid placing long user-facing strings directly in many components.
+    Không có yêu cầu điều chỉnh đang chờ xử lý.
 
-A centralized message or localization structure may be introduced when
-repetition becomes meaningful.
+    Chưa có dữ liệu thời khóa biểu cho bộ lọc đã chọn.
 
-Do not add a full internationalization framework unless multilingual support
-is required.
+Do not display an empty table without explanation.
 
----
-
-## 25. Security rules
-
-Frontend code is visible to users.
-
-Never place secrets in:
-
-- TypeScript files.
-- React components.
-- `VITE_` environment variables.
-- Static assets.
-- Browser storage.
-- Source maps.
-
-Do not store:
-
-- Database credentials.
-- Private keys.
-- Backend signing secrets.
-- Administrative passwords.
-
-### 25.1. Browser storage
-
-Do not place sensitive data in browser storage without understanding the
-security implications.
-
-Authentication storage strategy must follow the approved backend design.
-
-Do not create a custom token-storage mechanism casually.
-
-### 25.2. Untrusted content
-
-Treat API and uploaded data as untrusted display content.
-
-Avoid rendering raw HTML.
-
-Do not use `dangerouslySetInnerHTML` unless explicitly justified and sanitized.
-
-### 25.3. File downloads
-
-Use backend-provided export responses safely.
-
-Do not construct file content from unvalidated client state when the backend
-must provide the official timetable export.
+Error messages should tell the user what happened and what they can do next.
 
 ---
 
-## 26. Performance
+## 25. Tables and Large Data
 
-Do not optimize prematurely.
+Tables may contain hundreds of course sections and thousands of dated
+occurrences.
 
-Before optimizing:
+Use appropriate techniques:
 
-1. Confirm correct behavior.
-2. Measure the problem.
-3. Identify the expensive render or request.
-4. Apply a focused change.
-5. Verify the result.
-
-Avoid unnecessary use of:
-
-- `useMemo`.
-- `useCallback`.
-- React memoization.
-- Global state.
-- Virtualization.
-
-Use them only when they solve an observed or clearly justified problem.
-
-### 26.1. Rendering
-
-Avoid:
-
-- Expensive calculations inside repeated renders.
-- Creating large transformed datasets repeatedly.
-- Rendering thousands of rows without controls.
-- Unstable props that trigger unnecessary child renders.
-
-### 26.2. Network
-
-Avoid:
-
-- Duplicate requests.
-- Requesting complete datasets when filters or pagination exist.
-- Polling after a run completes.
-- Refetching unchanged reference data unnecessarily.
-
-Performance changes must not compromise correctness or clarity.
-
----
-
-## 27. State management
-
-Use the simplest appropriate state location.
-
-Possible categories:
-
-- Local component state.
-- Feature-level context.
-- URL state.
-- Server-state library when formally adopted.
-- Application-wide authentication state.
-
-Do not put all state into a global store.
-
-Global state should be reserved for truly application-wide concerns, such as:
-
-- Current authenticated user.
-- Global authentication status.
-- Shared application configuration.
-
-Server data should not be duplicated unnecessarily in local and global state.
-
-Do not introduce Redux or another large state-management library without a
-clear project need and approval.
-
----
-
-## 28. Routing
-
-Routes should reflect user workflows.
-
-Potential routes may include:
-
-```text
-/login
-/imports
-/imports/:batchId
-/algorithm/configure
-/algorithm/runs/:runId
-/timetables/lecturers
-/timetables/rooms
-/timetables/sections
-/my-timetable
-/adjustment-requests
-/adjustment-requests/:requestId
-```
-
-The final route structure must follow actual implementation decisions.
-
-### 28.1. Route protection
-
-Protected routes should:
-
-- Check authentication state.
-- Check relevant permission state.
-- Handle loading while authentication is being resolved.
-- Redirect or display access denied appropriately.
-
-Backend authorization remains mandatory.
-
-### 28.2. Not found
-
-Provide a meaningful not-found page.
-
-Do not silently redirect every unknown route to the home page.
-
----
-
-## 29. Tables and data presentation
-
-Data tables should support the actual user task.
-
-Consider:
-
-- Stable column headers.
-- Sorting where useful.
-- Filtering.
 - Pagination.
-- Loading state.
-- Empty state.
-- Error state.
-- Row actions.
-- Accessible headers.
-- Responsive overflow.
+- Filtering.
+- Sorting.
+- Search.
+- Server-side queries where appropriate.
+- Virtualization when necessary.
+- Stable column widths.
+- Sticky headers where useful.
 
-Do not display internal IDs unless they help the user.
+Use stable identifiers as row keys.
 
-Use domain identifiers such as section codes when they are meaningful.
+Do not use array indexes as keys for mutable timetable rows.
 
-For validation reports, keep row and column information visible.
-
----
-
-## 30. Export actions
-
-Export buttons should clearly state:
-
-- Format.
-- Scope.
-- Current filters or selected timetable.
-- Whether the export is being prepared.
-
-Examples:
-
-```text
-Xuất CSV
-Xuất Excel
-Xuất lịch giảng viên
-Xuất thời khóa biểu tổng thể
-```
-
-Handle:
-
-- Loading state.
-- Empty export.
-- Server error.
-- Unauthorized export.
-- Filename from response headers when available.
-
-Do not claim an export succeeded before the response is received.
+Do not request and render the entire semester when the user is viewing only one
+week.
 
 ---
 
-## 31. Frontend testing
+## 26. Date and Number Formatting
 
-Use the configured frontend test tools once available.
+Use a consistent Vietnamese date display format:
 
-Tests should focus on user-observable behavior.
+    dd/MM/yyyy
 
-Avoid tests that depend heavily on internal implementation details.
+Display date ranges as:
 
-### 31.1. Component tests
+    01/09/2026–20/12/2026
 
-Test components for:
+Send API dates in the documented API format, normally:
 
-- Correct rendering.
-- Loading state.
-- Empty state.
-- Error state.
-- User interaction.
-- Validation messages.
-- Permission-based controls.
-- Successful submissions.
-- Failed submissions.
+    yyyy-MM-dd
 
-### 31.2. Form tests
+Do not send locale-formatted dates to the backend unless the API explicitly
+requires them.
 
-Test:
+Display GA rates consistently as either:
 
-- Required fields.
-- Invalid numeric ranges.
-- Duplicate submission prevention.
-- Backend field errors.
-- Successful submission.
-- Unexpected server failure.
+- Decimal values such as `0,10`.
+- Percentages such as `10%`.
 
-### 31.3. Timetable tests
-
-Test:
-
-- Timetable entries render correctly.
-- Empty slots render appropriately.
-- Week changes update data.
-- Filters affect displayed results.
-- Entry details are accessible.
-- Unauthorized actions are unavailable.
-- Backend-reported conflicts are visible.
-
-### 31.4. Import tests
-
-Test:
-
-- Selecting a valid CSV file.
-- Rejecting an unsupported file.
-- Upload loading state.
-- Preview rendering.
-- Multiple validation errors.
-- Import confirmation.
-- Import failure.
-
-### 31.5. Authorization tests
-
-Test:
-
-- Lecturer navigation.
-- Training Department navigation.
-- Unauthorized route access.
-- Forbidden action handling.
-- Authentication expiration behavior.
-
-Do not only test whether a button is hidden; test route and error handling as
-well.
-
-### 31.6. API mocking
-
-Mock API boundaries, not internal component functions.
-
-Use realistic request and response shapes.
-
-Do not create mock responses that contradict the documented backend contract.
+Do not mix the two formats on the same form without explanation.
 
 ---
 
-## 32. Frontend commands
+## 27. Accessibility
 
-Check the actual `package.json` before running commands.
+The frontend should be usable with keyboard navigation.
 
-When configured, expected commands may include:
+Provide:
 
-```bash
-cd frontend
-npm install
-```
+- Associated labels for inputs.
+- Visible focus indicators.
+- Semantic buttons.
+- Accessible table headers.
+- Alternative text for meaningful images.
+- Text labels in addition to status colors.
+- Sufficient contrast.
 
-```bash
-cd frontend
-npm run dev
-```
+Modal dialogs should:
 
-```bash
-cd frontend
-npm run lint
-```
+- Receive focus when opened.
+- Keep focus within the dialog while active.
+- Return focus to the triggering element after closing.
+- Support keyboard closing when safe.
 
-```bash
-cd frontend
-npm test
-```
-
-```bash
-cd frontend
-npm run build
-```
-
-Do not report a command as successful unless it was actually run.
-
-If a script is not configured, report that fact.
-
-Do not invent script names without updating and documenting `package.json`.
-
-Use the project’s selected package manager consistently.
-
-Do not mix:
-
-```text
-npm
-yarn
-pnpm
-```
-
-without an explicit decision.
-
-Commit the appropriate lock file.
+Do not use clickable `div` elements when a semantic button or link is
+appropriate.
 
 ---
 
-## 33. Environment configuration
+## 28. Responsive Design
 
-Frontend environment variables should be documented in:
+The primary target is a desktop web application.
 
-```text
-.env.example
-```
+Still ensure:
 
-Possible frontend variable:
+- Forms remain usable on smaller screens.
+- Tables can scroll horizontally.
+- Important actions remain visible.
+- Dialogs do not exceed the viewport.
+- Navigation remains accessible.
 
-```env
-VITE_API_BASE_URL=http://localhost:8000
-```
-
-Do not commit real environment files.
-
-Do not place secret values in frontend environment variables.
-
-Validate required environment configuration at startup when appropriate.
-
-Fail with a clear development error when a required value is missing.
+Do not reduce the desktop timetable experience merely to force a complex weekly
+calendar into a narrow mobile layout.
 
 ---
 
-## 34. Error boundaries
+## 29. Performance
 
-Use error boundaries for unexpected render failures when the application
-structure justifies them.
+Avoid unnecessary API requests and component re-renders.
 
-An error boundary does not replace:
+Use one consistent server-state approach when a query library is selected.
 
-- API error handling.
-- Form validation.
-- Loading states.
-- Domain error rendering.
+Do not duplicate large timetable collections across multiple component states.
 
-Do not wrap every small component in a separate error boundary.
+Prefer backend filtering for large datasets.
 
-Provide a safe fallback and a way to retry or navigate.
+Use memoization only when it provides a clear benefit.
+
+Do not optimize prematurely at the cost of readability.
 
 ---
 
-## 35. Documentation requirements
+## 30. Security and Privacy
 
-When frontend behavior changes, update relevant documentation.
+Never place secrets in frontend source code.
 
-Examples:
+Frontend environment variables must not contain:
 
-- New route.
-- New environment variable.
-- New role requirement.
-- New user workflow.
-- New API dependency.
-- New setup command.
-- New component convention.
+- Database passwords.
+- Private API keys.
+- Administrative credentials.
+- Permanent access tokens.
 
-Do not describe a planned feature as completed.
+Do not log:
 
-Use clear status language:
+- Passwords.
+- Authentication tokens.
+- Sensitive personal information.
+- Complete private API responses unnecessarily.
 
-- Planned.
-- In development.
-- Implemented.
-- Requires confirmation.
+Student accounts and student personal data are outside the current project
+scope.
 
-Screenshots should not be treated as the only documentation of behavior.
+Sample screens and tests must not include real private student data.
 
 ---
 
-## 36. Prohibited actions
+## 31. Testing
 
-Do not:
+Frontend tests should focus on visible user behavior.
 
-- Put business rules only in the frontend.
-- Call the database directly.
-- Hard-code backend URLs in many components.
-- Store backend secrets in `VITE_` variables.
-- Use `any` without justification.
-- Scatter raw status strings throughout the application.
-- Use array indexes as keys when stable IDs exist.
-- Render raw unsanitized HTML.
-- Claim a timetable is valid based on frontend checks.
-- Hide backend validation details behind a generic error without reason.
-- Add a large UI or state library without approval.
-- Duplicate API types inconsistently across features.
-- Use color as the only status indicator.
-- Make destructive actions without confirmation.
-- Leave polling running after completion.
-- Claim tests passed without running them.
-- Reformat unrelated frontend files in a small PR.
-- Implement mobile-specific scope not required by the project.
-- Create a visual design system before the project needs it.
+At minimum, test:
 
----
+- Login success and failure.
+- Role-based navigation.
+- Protected routes.
+- CSV preview.
+- CSV validation-error display.
+- Invalid GA configuration.
+- GA run-status display.
+- Timetable filtering.
+- Weekend timetable display.
+- Theory time-slot labels.
+- Practice time-slot labels.
+- Integrated-course display.
+- Room-capacity hard errors.
+- Large-room soft warnings.
+- Holiday dates without normal sessions.
+- Missing-session count.
+- Schedule-segment display.
+- Editing only one occurrence.
+- Editing a date range.
+- Direct Training Office adjustment.
+- Lecturer-request submission.
+- Request approval.
+- Request rejection.
+- Makeup-session creation.
+- Empty, loading, and error states.
 
-## 37. Frontend Definition of Done
-
-A frontend task is complete when applicable conditions are satisfied:
-
-- The UI matches the assigned Issue and acceptance criteria.
-- Loading, empty, error and success states are handled.
-- User input is validated appropriately.
-- Backend validation remains authoritative.
-- Role-based behavior is represented correctly.
-- Protected actions rely on backend authorization.
-- API calls use the centralized client.
-- Request and response types are defined.
-- Components have clear responsibilities.
-- Accessibility basics are addressed.
-- Relevant tests are added or updated.
-- Configured lint, test and build checks pass.
-- No secret or machine-specific configuration is committed.
-- Documentation is updated when behavior changes.
-- Assumptions and unresolved API dependencies are reported.
-
-A screen that only works with one hard-coded response is not complete.
+Avoid fragile tests that depend heavily on CSS classes or internal component
+implementation.
 
 ---
 
-## 38. Final report for frontend changes
+## 32. Code Quality
 
-After modifying frontend files, report:
+- Use clear component and function names.
+- Keep components focused.
+- Extract repeated UI patterns.
+- Avoid deeply nested conditional rendering.
+- Avoid files containing unrelated features.
+- Prefer explicit props and types.
+- Remove unused imports.
+- Remove dead code.
+- Do not commit debugging logs.
+- Do not suppress type errors without documenting the reason.
+- Centralize labels, enums, route names, and query keys.
+- Follow the configured formatter and linter.
 
-### Summary
+Do not add a state-management library unless the project needs it.
 
-Describe the user-visible behavior that changed.
+Do not create abstractions that are more complicated than the feature they
+support.
 
-### Files
+---
 
-List created, modified and deleted files.
+## 33. Scope Protection
 
-### Routes and screens
+Do not create frontend modules for:
 
-State:
+- Student accounts.
+- Course registration.
+- Student individual timetables.
+- Tuition.
+- Grades.
+- Student profiles.
+- Automatic student-availability checking.
+- Automatic email, SMS, or push notifications.
+- Automatic lecturer-to-course assignment.
+- Practical-class group splitting.
+- Multiple primary lecturers for one course section.
+- Guaranteed globally optimal timetable generation.
 
-- Routes added or changed.
-- Screens added or changed.
-- Permissions involved.
+When a requested screen implies a new business requirement, update the URS and
+SRS before implementing it.
 
-### API impact
+---
 
-State:
+## 34. Definition of Done
 
-- Endpoints consumed.
-- Request and response types.
-- Mocked or unavailable backend behavior.
-- Error handling added.
+A frontend change is complete when:
 
-### UI states
-
-State which of these were handled:
-
-- Loading.
-- Empty.
-- Error.
-- Success.
-- Unauthorized or forbidden.
-
-### Verification
-
-List:
-
-- Lint commands.
-- Test commands.
-- Build commands.
-- Manual checks.
-- Results.
-
-### Accessibility
-
-State relevant accessibility checks performed.
-
-### Assumptions and risks
-
-List unresolved requirements, backend dependencies or untested behavior.
+- It follows the latest URS and SRS.
+- It respects role permissions.
+- It uses typed API contracts.
+- It handles loading, success, empty, and error states.
+- It does not duplicate authoritative backend business logic.
+- User-facing text is clear and consistent in Vietnamese.
+- It supports keyboard use where applicable.
+- It includes appropriate tests.
+- It contains no secrets or private sample data.
+- Formatting, linting, type checking, and tests pass.

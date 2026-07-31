@@ -1,0 +1,21 @@
+﻿lecturer_code,lecturer_name,preferred_days,preferred_slots,undesired_days,undesired_slots,max_days_per_week,max_consecutive_sessions
+GV001,Nguyễn Văn An,2|4,MON_1_3|WED_4_6,6,FRI_13_15,4,3
+GV002,Trần Thị Bình,3|5,TUE_1_3|THU_4_6,7,SAT_13_15,4,3
+GV003,Lê Minh Châu,4|6,WED_1_3|FRI_4_6,8,SUN_13_15,4,3
+GV004,Phạm Quốc Dũng,5|7,THU_1_3|SAT_4_6,2,MON_13_15,4,3
+GV005,Hoàng Thị Hạnh,6|8,FRI_1_3|SUN_4_6,3,TUE_13_15,4,3
+GV006,Võ Anh Khoa,7|2,SAT_1_3|MON_4_6,4,WED_13_15,4,3
+GV007,Đặng Thanh Lan,8|3,SUN_1_3|TUE_4_6,5,THU_13_15,4,3
+GV008,Bùi Đức Long,2|4,MON_1_3|WED_4_6,6,FRI_13_15,4,3
+GV009,Đỗ Thị Mai,3|5,TUE_1_3|THU_4_6,7,SAT_13_15,4,3
+GV010,Huỳnh Gia Nam,4|6,WED_1_3|FRI_4_6,8,SUN_13_15,4,3
+GV011,Ngô Phương Nhi,5|7,THU_1_3|SAT_4_6,2,MON_13_15,4,3
+GV012,Mai Tiến Phát,6|8,FRI_1_3|SUN_4_6,3,TUE_13_15,4,3
+GV013,Cao Thu Quỳnh,7|2,SAT_1_3|MON_4_6,4,WED_13_15,4,3
+GV014,Lý Hoàng Sơn,8|3,SUN_1_3|TUE_4_6,5,THU_13_15,4,3
+GV015,Tạ Minh Tâm,2|4,MON_1_3|WED_4_6,6,FRI_13_15,4,3
+GV016,Đinh Bảo Trâm,3|5,TUE_1_3|THU_4_6,7,SAT_13_15,4,3
+GV017,Phan Nhật Vũ,4|6,WED_1_3|FRI_4_6,8,SUN_13_15,4,3
+GV018,Hồ Khánh Vy,5|7,THU_1_3|SAT_4_6,2,MON_13_15,4,3
+GV019,Trương Quốc Việt,6|8,FRI_1_3|SUN_4_6,3,TUE_13_15,4,3
+GV020,Vũ Kim Yến,7|2,SAT_1_3|MON_4_6,4,WED_13_15,4,3
