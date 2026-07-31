@@ -40,6 +40,10 @@ The latest approved URS and SRS documents are the primary business-requirement s
 3. Do not invent missing requirements.
 4. Record unresolved issues in the requirements documentation before implementation.
 
+Before starting a new implementation session, read
+`docs/backlog/TKB-001-to-TKB-005.md` for the current technical handoff and
+prioritized backlog. It is not a replacement for the URS/SRS.
+
 ---
 
 ## 3. Approved System Users
@@ -177,9 +181,13 @@ A session must remain inside one valid teaching block. Do not create schedules t
 
 Monday through Sunday are valid teaching days.
 
-Saturday and Sunday must not receive a default penalty merely because they are weekends.
+Saturday, Sunday, and evening slots remain valid teaching times. The default
+quality policy may apply configurable soft avoidance weights to these times
+because they are normally less preferred.
 
-Some lecturers may prefer weekend teaching, while others may prefer weekdays.
+An explicit lecturer preferred day or preferred slot must override the default
+avoidance for that lecturer. The GA may still use these slots when they are the
+best feasible option; this is never a hard-constraint violation.
 
 Lecturer preferences are soft constraints and may include:
 
@@ -373,11 +381,14 @@ Examples include:
 - Reducing long gaps between a lecturer's sessions.
 - Avoiding unnecessarily scattered teaching days.
 - Maintaining a reasonably balanced teaching distribution.
+- Preferring weekdays and daytime sessions when no lecturer-specific preference applies.
 - Selecting rooms with capacity close to the class size.
 - Preserving large lecture halls when suitable standard rooms remain available.
 - Keeping a stable regular schedule for each course section.
 
-Do not penalize Saturday or Sunday by default.
+Do not make Saturday, Sunday, or evening sessions invalid solely because of
+their time. Their avoidance weights must be configurable and recorded with
+each GA run.
 
 Soft-constraint weights must be configurable and recorded with each GA run.
 
@@ -396,6 +407,12 @@ Default CSV requirements:
 - Explicit and documented field names.
 - Dates in one documented format.
 - No silent conversion of invalid values.
+
+The Training Office prepares one complete seven-file CSV batch in Excel and
+uploads it to the application. After preview and validation, only an explicitly
+confirmed batch is persisted and eligible for a GA run. The `official` sample
+directory is a development/test fixture and must not be the normal runtime
+input source.
 
 The input model may include:
 

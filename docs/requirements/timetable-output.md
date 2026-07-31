@@ -1,84 +1,93 @@
-# Timetable Output Contract
+﻿# Timetable Output Contract
 
-This document defines the output produced by the GA module and consumed by backend APIs, frontend views and export logic.
+This document defines output produced by the GA module and consumed by backend APIs, frontend views and export logic.
 
-## 1. Timetable Session Fields
+The MVP GA output is a base weekly assignment per course section. Dated session occurrences are generated later by a calendar-expansion service.
 
-Each scheduled session should have these fields:
+## 1. Base Assignment Fields
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `run_code` | string | Yes | GA run or timetable option code. |
-| `session_id` | string | Yes | Unique generated session ID. |
+| `run_code` | string | Yes | GA run code. |
 | `section_code` | string | Yes | Course-section code. |
 | `course_code` | string | Yes | Course code. |
 | `course_name` | string | Yes | Course name. |
-| `lecturer_code` | string | Yes | Lecturer code. |
+| `lecturer_code` | string | Yes | Fixed primary lecturer code. |
 | `lecturer_name` | string | Yes | Lecturer display name. |
 | `room_code` | string | Yes | Assigned room code. |
 | `room_name` | string | Yes | Assigned room display name. |
-| `slot_code` | string | Yes | Assigned time slot code. |
-| `day_of_week` | integer | Yes | 2 to 8, where 2 is Monday and 8 is Sunday. |
+| `slot_code` | string | Yes | Assigned configured time slot. |
+| `day_of_week` | integer | Yes | `2` to `8`, Monday to Sunday. |
 | `start_period` | integer | Yes | Start period. |
 | `end_period` | integer | Yes | End period. |
-| `week` | integer | Yes | Teaching week number. |
-| `course_type` | enum | Yes | `LY_THUYET` or `THUC_HANH` for MVP. |
+| `course_type` | enum | Yes | `THEORY`, `PRACTICE`, `INTEGRATED`. |
+| `required_room_type` | enum/string | Yes | Required room type from the course section. |
 | `scheduling_student_count` | integer | Yes | Student count used for capacity checking. |
-| `status` | enum | Yes | `SCHEDULED`, `SUSPENDED` or `MOVED`. |
+| `status` | enum | Yes | Example: `SCHEDULED`, `MOVED`, `CANCELLED`. |
 
-## 2. Run Metrics Fields
+## 2. Dated Occurrence Fields
 
-GA run summary should include:
+When the academic calendar expands a base assignment into actual dates, each occurrence should include:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `occurrence_id` | string | Yes | Unique generated occurrence ID. |
+| `section_code` | string | Yes | Course-section code. |
+| `date` | date | Yes | Teaching date. |
+| `academic_week` | integer | Yes | Academic week number. |
+| `room_code` | string | Yes | Effective room for this occurrence. |
+| `slot_code` | string | Yes | Effective slot for this occurrence. |
+| `status` | enum | Yes | Example: `SCHEDULED`, `MOVED`, `MAKEUP`. |
+
+When a regular class date falls on a holiday or non-teaching day, do not generate a normal occurrence for that date, do not show it as `SUSPENDED`, and do not automatically move it. The course section may be reported as needing a makeup session later.
+
+## 3. Run Metrics Fields
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `run_code` | string | Unique run code. |
-| `dataset_code` | string | Input dataset batch used by the run. |
-| `status` | enum | `PENDING`, `RUNNING`, `COMPLETED`, `FAILED` or `STOPPED`. |
+| `dataset_code` | string | Import batch used by the run. |
+| `status` | enum | `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`, `STOPPED`. |
 | `population_size` | integer | GA population size. |
-| `generations` | integer | Number of generations configured. |
-| `crossover_rate` | number | 0 to 1. |
-| `mutation_rate` | number | 0 to 1. |
-| `seed` | integer | Optional reproducibility seed. |
-| `fitness` | number | Best fitness score. |
-| `hard_violation_count` | integer | Must be 0 for a valid selected timetable. |
-| `soft_violation_count` | integer | Total soft violations or weighted soft penalty count. |
+| `generations` | integer | Maximum generations configured. |
+| `crossover_rate` | number | 0 to 1 when real crossover is implemented. |
+| `mutation_rate` | number | 0 to 1 when real mutation is implemented. |
+| `seed` | integer | Reproducibility seed. |
+| `hard_violation_count` | integer | Must be 0 for a selectable timetable. |
+| `soft_cost` | number | Weighted soft cost. |
+| `soft_breakdown` | object | Explanation of soft cost components. |
 | `started_at` | datetime | Run start time. |
 | `finished_at` | datetime | Run finish time. |
 | `duration_seconds` | number | Runtime duration. |
 
-## 3. Violation Report Fields
-
-Validation and GA checking should report violations in this shape:
+## 4. Violation Report Fields
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `code` | string | Constraint code, for example `HC-01` or `SC-01`. |
+| `code` | string | Constraint code, for example `HC-01`. |
 | `severity` | enum | `HARD` or `SOFT`. |
 | `message` | string | Human-readable Vietnamese message in UI. |
-| `session_id` | string | Related session if available. |
-| `section_code` | string | Related course section if available. |
-| `lecturer_code` | string | Related lecturer if available. |
-| `room_code` | string | Related room if available. |
-| `slot_code` | string | Related time slot if available. |
-| `week` | integer | Related week if available. |
+| `section_code` | string | Related section when available. |
+| `other_section_code` | string | Second section for overlap conflicts when available. |
+| `lecturer_code` | string | Related lecturer when available. |
+| `room_code` | string | Related room when available. |
+| `slot_code` | string | Related slot when available. |
 
-## 4. View Support
+## 5. View Support
 
-The output contract supports:
+The output supports:
 
 - Lecturer view by filtering `lecturer_code`.
 - Room view by filtering `room_code`.
 - Course-section view by filtering `section_code`.
-- Weekly view by filtering `week`.
-- Export by reusing the same session fields.
+- Weekly view after calendar expansion.
+- CSV/Excel export using the same base assignment or occurrence fields.
 
-## 5. Output Validity
+## 6. Output Validity
 
 A timetable can be selected as valid only when:
 
 - `hard_violation_count` is 0.
-- Every session has section, lecturer, room, slot and week.
-- Every course section has the required number of sessions.
-- All generated sessions pass `HC-01` to `HC-12`.
-
+- Every course section has exactly one base assignment in the MVP.
+- Every assignment has section, lecturer, room and active configured slot.
+- All hard constraints pass.

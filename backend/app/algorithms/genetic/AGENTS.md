@@ -124,10 +124,13 @@ Use the explicit room requirement from normalized course-section data.
 
 Monday through Sunday are valid teaching days.
 
-Saturday and Sunday must not receive a default penalty merely because they are
-weekends.
+Saturday, Sunday, and evening slots are valid teaching times. The project may
+apply configurable soft avoidance weights to them when no lecturer-specific
+preference applies.
 
-Weekend preferences depend on each lecturer.
+An explicit lecturer preferred day or slot waives the matching default
+avoidance weight. These assignments must never become hard-constraint
+violations solely because of their time.
 
 Algorithms must select only from configured valid time slots.
 
@@ -341,14 +344,9 @@ Supported soft preferences may include:
 - Preserving large rooms for large classes when standard rooms are available.
 - Maintaining stable regular schedules.
 
-Do not automatically penalize:
-
-- Saturday.
-- Sunday.
-- Consecutive valid sessions.
-- Movement between university buildings.
-
-Lecturer weekend preferences must come from input data.
+Do not automatically penalize consecutive valid sessions or movement between
+university buildings. Default evening/weekend avoidance must be configurable
+and must respect the corresponding lecturer preference.
 
 Soft-constraint weights must be configurable.
 
@@ -426,7 +424,7 @@ an otherwise valid available room.
 
 ## 13. Lecturer Restrictions and Preferences
 
-Do not assume that every lecturer preference is a mandatory unavailable slot.
+Do not assume that every lecturer preference is an officially confirmed hard restriction.
 
 Before course registration, unexpected future absences are generally unknown.
 
@@ -452,7 +450,7 @@ Examples of soft data:
 When an input file contains a field such as `mandatory`, interpret it
 explicitly.
 
-Do not treat every row in `lecturer_unavailable_slots.csv` as hard without
+Do not treat every row in `lecturer_time_preferences.csv` as hard without
 checking the row's mandatory status.
 
 ---

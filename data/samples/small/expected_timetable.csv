@@ -1,7 +1,0 @@
-run_code,session_id,section_code,course_code,course_name,lecturer_code,lecturer_name,room_code,room_name,slot_code,day_of_week,start_period,end_period,week,course_type,scheduling_student_count,status
-RUN-SMALL-001,S001,CT101-01,CT101,Nhập môn lập trình,GV001,Giảng viên mẫu 1,A101,Phòng A101,MON_AM_01,2,1,3,1,LY_THUYET,55,SCHEDULED
-RUN-SMALL-001,S002,CT101-01,CT101,Nhập môn lập trình,GV001,Giảng viên mẫu 1,A101,Phòng A101,WED_AM_01,4,1,3,2,LY_THUYET,55,SCHEDULED
-RUN-SMALL-001,S003,CT102-01,CT102,Cấu trúc dữ liệu,GV002,Giảng viên mẫu 2,A102,Phòng A102,TUE_AM_01,3,1,3,1,LY_THUYET,50,SCHEDULED
-RUN-SMALL-001,S004,CT102-01,CT102,Cấu trúc dữ liệu,GV002,Giảng viên mẫu 2,A102,Phòng A102,THU_PM_01,5,7,9,2,LY_THUYET,50,SCHEDULED
-RUN-SMALL-001,S005,CT103-01,CT103,Thực hành lập trình,GV003,Giảng viên mẫu 3,LAB201,Phòng Lab 201,MON_PM_01,2,7,9,1,THUC_HANH,40,SCHEDULED
-RUN-SMALL-001,S006,CT103-01,CT103,Thực hành lập trình,GV003,Giảng viên mẫu 3,LAB201,Phòng Lab 201,FRI_AM_01,6,1,3,2,THUC_HANH,40,SCHEDULED

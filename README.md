@@ -292,8 +292,10 @@ mọi lớp tích hợp đều bắt buộc học tại phòng máy.
 
 Tất cả các ngày từ Thứ Hai đến Chủ nhật đều có thể được sử dụng để xếp lịch.
 
-Thứ Bảy và Chủ nhật không bị xem là thời gian không hợp lệ và không bị phạt mặc
-định.
+Thứ Bảy, Chủ nhật và ca tối không bị xem là thời gian không hợp lệ. Hệ thống có
+thể dùng trọng số mềm có thể cấu hình để ưu tiên ngày thường và ban ngày khi
+không có nguyện vọng riêng của giảng viên. Nếu giảng viên đã ưu tiên ngày hoặc
+khung giờ đó, trọng số mặc định tương ứng không được áp dụng.
 
 Nguyện vọng học cuối tuần phụ thuộc từng giảng viên:
 
@@ -549,7 +551,9 @@ Các tiêu chí tối ưu có thể bao gồm:
 - Hạn chế sử dụng phòng lớn cho lớp nhỏ khi vẫn còn phòng tiêu chuẩn.
 - Giữ lịch cơ sở ổn định.
 
-Thứ Bảy và Chủ nhật không bị phạt mặc định.
+Ưu tiên ngày thường và ban ngày bằng trọng số mềm có thể cấu hình; Thứ Bảy,
+Chủ nhật và ca tối vẫn là lựa chọn hợp lệ. Nguyện vọng cụ thể của giảng viên
+được ưu tiên hơn trọng số mặc định này.
 
 Việc dạy các ca liên tiếp không bị xem là lỗi nếu không có xung đột.
 

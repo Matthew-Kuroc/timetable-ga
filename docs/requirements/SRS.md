@@ -1,4 +1,4 @@
-# Software Requirements Specification
+﻿# Software Requirements Specification
 
 ## 1. Document Information
 
@@ -45,7 +45,6 @@ This document specifies software requirements for a web application that support
 | --- | --- | --- |
 | Training Department / Manager | Log in; import data; configure and run GA; view all schedules; receive, check, approve or reject change requests; apply changes; export data; view run and request history. | May apply changes only after data is valid and hard constraints are checked. |
 | Lecturer | Log in; view personal weekly timetable; view class details; submit suspend/move requests; track request status. | Cannot directly edit timetables, add classes, delete classes, reject classes, approve requests or edit another lecturer's timetable. |
-| Technical administrator | Manage accounts, roles, technical configuration, logs and operation support. | Must not approve or change timetable business data without Training Department authority. |
 | Supervisor / tester | Provide data, test functions and evaluate results. | May not be a regular operational account. |
 
 ## 5. Priority Levels
@@ -67,14 +66,15 @@ This document specifies software requirements for a web application that support
 | `course_name` | String | Yes | Course name. |
 | `section_code` | String | Yes | Course-section code, unique within a semester/dataset. |
 | `lecturer_code` | String | Yes | Must reference an existing lecturer. |
-| `number_of_sessions` | Integer | Yes | Greater than 0. |
+| `required_sessions` | Integer | Yes | Greater than 0. |
 | `periods_per_session` | Integer | Yes | Usually 3 for theory classes. |
 | `expected_students` | Integer | Yes | Greater than 0. |
 | `initial_registration_limit` | Integer | Should | Initial registration limit, usually around 50 or 55. |
 | `approved_max_students` | Integer | Should | Approved maximum after adjustment, possibly 60 or 65 depending on room/business rule. |
 | `current_registered_students` | Integer | No | Current actual registered count when synchronized. |
 | `scheduling_student_count` | Integer / computed | Yes | Use `approved_max_students`, otherwise `initial_registration_limit`, otherwise `expected_students`. |
-| `course_type` | Enum | Yes | `LY_THUYET` or `THUC_HANH`; extensible when real data requires. |
+| `course_type` | Enum | Yes | `THEORY`, `PRACTICE` or `INTEGRATED`. |
+| `required_room_type` | Enum/String | Yes | Explicit room requirement; do not infer only from course type. |
 | `weeks` | String / list | Should | Teaching week list or range. |
 | `campus_code` | String | Could | Campus/building area if multiple campuses exist. |
 | `notes` | String | No | Business notes. |
@@ -86,7 +86,7 @@ This document specifies software requirements for a web application that support
 | `room_code` | String | Yes | Unique room code. |
 | `room_name` | String | Yes | Display name. |
 | `capacity` | Integer | Yes | Greater than 0. |
-| `room_type` | Enum | Yes | Theory, practice or another defined type. |
+| `room_type` | Enum | Yes | `THEORY_ROOM`, `COMPUTER_LAB`, `SPECIALIZED_LAB` or another documented compatible room type. |
 | `campus_code` | String | Should | Campus/building area. |
 | `available` | Boolean | Yes | Whether the room can be used in the semester. |
 | `unavailable_slots` | List | No | Slots where the room cannot be used. |
@@ -100,6 +100,7 @@ This document specifies software requirements for a web application that support
 | `start_period` | Integer | Yes | Start period. |
 | `end_period` | Integer | Yes | Must be greater than or equal to `start_period`. |
 | `session_type` | Enum | Should | Morning, afternoon or evening. |
+| `supports_course_types` | List/String | Yes | Course types supported by this configured slot. |
 | `active` | Boolean | Yes | Whether the slot is usable for scheduling. |
 
 ### 6.4 Lecturers
@@ -108,7 +109,7 @@ This document specifies software requirements for a web application that support
 | --- | --- | --- | --- |
 | `lecturer_code` | String | Yes | Unique lecturer code. |
 | `lecturer_name` | String | Yes | Lecturer full name. |
-| `unavailable_slots` | List | No | Mandatory unavailable slots are treated as hard constraints. |
+| `time_preferences` | List | No | Preferred or undesired teaching slots are treated as soft constraints. A slot becomes a hard restriction only when officially confirmed by the Training Department. |
 | `preferred_slots` | List | No | Treated as soft constraints. |
 | `max_days_per_week` | Integer | No | Desired maximum teaching days; hard/soft status needs confirmation. |
 | `max_consecutive_sessions` | Integer | No | Desired maximum consecutive sessions. |
@@ -137,7 +138,7 @@ This document specifies software requirements for a web application that support
 | Code | Requirement | Priority | Acceptance criteria |
 | --- | --- | --- | --- |
 | FR-AUTH-01 | System allows users to log in with a valid account. | Must | Correct account can access; incorrect account is rejected with a message. |
-| FR-AUTH-02 | System identifies Training Department/manager, lecturer and technical administrator roles. | Must | Each account only sees functions for its role. |
+| FR-AUTH-02 | System identifies Training Office and lecturer roles for the MVP. | Must | Each account only sees functions for its role. |
 | FR-AUTH-03 | Lecturers can only view personal schedules, submit requests for assigned classes and cannot directly edit timetables. | Must | API and UI reject unauthorized access or updates. |
 | FR-AUTH-04 | Training Department can view, approve, reject and apply change requests after validation. | Must | Only the correct role can access approval features. |
 | FR-AUTH-05 | System allows logout and session termination. | Must | Protected pages require login again after logout. |
@@ -146,13 +147,13 @@ This document specifies software requirements for a web application that support
 
 | Code | Requirement | Priority | Acceptance criteria |
 | --- | --- | --- | --- |
-| FR-DATA-01 | Manager can choose data type and upload corresponding CSV. | Must | Valid file is accepted and status is shown. |
+| FR-DATA-01 | Manager can upload one complete seven-file CSV batch exported from Excel. | Must | All required files are recognized, validated together and shown as one batch. |
 | FR-DATA-02 | System previews data before saving. | Must | Shows column headers and sample rows; user can cancel. |
 | FR-DATA-03 | System validates structure, data types and references. | Must | Reports all found errors by row and column. |
 | FR-DATA-04 | Manager can download import error report. | Should | Report contains row, column, value and reason. |
-| FR-DATA-05 | System saves only import batches confirmed by the user. | Must | No new data is saved when user cancels. |
+| FR-DATA-05 | System saves only import batches confirmed by the user. A later correction creates a new batch version and does not overwrite a batch used by an earlier GA run. | Must | No new data is saved when user cancels; previous runs remain reproducible. |
 | FR-DATA-06 | System stores import batch code, type, time, importer and status. | Should | Import batch can be looked up later. |
-| FR-DATA-07 | Manager can choose the dataset batch for a GA run. | Must | Run is linked to the correct data version. |
+| FR-DATA-07 | Manager can choose a confirmed dataset batch for a GA run. The built-in sample dataset is restricted to development and demonstration. | Must | Run is linked to the selected batch and data version. |
 | FR-DATA-08 | Manager can delete or deactivate unused import batches by permission. | Could | Existing saved results are not broken. |
 
 ### 8.3 Genetic Algorithm
@@ -231,7 +232,7 @@ This document specifies software requirements for a web application that support
 | HC-04 | Each session must use a valid time slot. | Reject, repair or penalize so the option cannot be selected. |
 | HC-05 | Room type must match course-section type. | Reject, repair or penalize so the option cannot be selected. |
 | HC-06 | Room physical capacity must be greater than or equal to `scheduling_student_count`. | Reject, repair or penalize so the option cannot be selected. |
-| HC-07 | Lecturer must not be scheduled into mandatory unavailable slots. | Reject, repair or penalize so the option cannot be selected. |
+| HC-07 | Lecturer must not be scheduled into officially confirmed fixed restrictions. Lecturer self-declared preferences remain soft unless confirmed. | Reject, repair or penalize so the option cannot be selected. |
 | HC-08 | Room must not be scheduled into unavailable slots. | Reject, repair or penalize so the option cannot be selected. |
 | HC-09 | A session must have course section, lecturer, room and time slot. | Reject, repair or penalize so the option cannot be selected. |
 | HC-10 | Sessions must be within allowed teaching weeks. | Reject, repair or penalize so the option cannot be selected. |
@@ -242,11 +243,11 @@ This document specifies software requirements for a web application that support
 
 | Code | Constraint | Evaluation |
 | --- | --- | --- |
-| SC-01 | Prefer lecturer desired time slots. | Count/magnitude of violations multiplied by configured weight. |
+| SC-01 | Prefer lecturer desired time slots and avoid lecturer undesired time slots. | Count/magnitude of violations multiplied by configured weight. |
 | SC-02 | Avoid too many consecutive sessions for a lecturer. | Count/magnitude of violations multiplied by configured weight. |
 | SC-03 | Reduce gaps between sessions in the same day. | Count/magnitude of violations multiplied by configured weight. |
 | SC-04 | Distribute teaching schedule reasonably across the week. | Count/magnitude of violations multiplied by configured weight. |
-| SC-05 | Avoid night, Saturday or Sunday sessions when unnecessary. | Count/magnitude of violations multiplied by configured weight. |
+| SC-05 | Prefer weekday and daytime sessions through configurable project weights. Saturday, Sunday and evening slots remain valid; waive the matching default penalty when the lecturer explicitly prefers that day or slot. | Count/magnitude of avoidable assignments multiplied by configured weight. |
 | SC-06 | Prefer room capacity close to class size to reduce waste. | Count/magnitude of violations multiplied by configured weight. |
 | SC-07 | Avoid frequent campus changes for one lecturer when campus data exists. | Count/magnitude of violations multiplied by configured weight. |
 | SC-08 | Prefer schedule stability for sessions of the same course section. | Count/magnitude of violations multiplied by configured weight. |
@@ -331,6 +332,8 @@ This document specifies software requirements for a web application that support
 - Lecturers can submit requests but cannot directly change official timetables.
 - Training Department approval is required before applying changes.
 - Authorization must be enforced by backend APIs.
+- The Training Department prepares the complete seven-file CSV batch in Excel, previews and validates it, then confirms it before it can be used by GA. Built-in sample data is only for development and demonstration.
+- A default soft policy may discourage evening, Saturday and Sunday assignments. These assignments remain valid, and lecturer-specific preferred days or slots override the matching default penalty.
 
 ### 15.2 Open Issues / Risks
 

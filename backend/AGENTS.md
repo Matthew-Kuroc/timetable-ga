@@ -203,9 +203,12 @@ time slot.
 
 Monday through Sunday are valid teaching days.
 
-Saturday and Sunday must not receive an automatic penalty.
+Saturday, Sunday, and evening slots remain valid teaching times. A configurable
+project-wide soft weight may discourage their use when no lecturer-specific
+preference applies.
 
-Weekend scheduling is normal at the university.
+This default avoidance reflects the usual availability of lecturers; it is not
+a hard constraint and must never make an otherwise feasible timetable invalid.
 
 A lecturer may:
 
@@ -214,14 +217,11 @@ A lecturer may:
 - Have no day preference.
 - Mark a day as undesirable.
 
-Weekend penalties may only come from explicit lecturer preferences.
+If a lecturer explicitly prefers a day or slot, do not apply the corresponding
+default avoidance penalty to that lecturer.
 
-Do not implement a global rule such as:
-
-    Saturday penalty = 10
-    Sunday penalty = 20
-
-unless this is explicitly configured as a project-wide preference.
+Keep these weights in GA configuration and store them with every run so the
+result can be reproduced and explained.
 
 ---
 
@@ -253,7 +253,7 @@ A lecturer restriction is hard only when input data explicitly marks it as:
 
 The sample field `mandatory` must be interpreted explicitly.
 
-Do not convert every entry in `lecturer_unavailable_slots.csv` into a hard
+Do not convert every entry in `lecturer_time_preferences.csv` into a hard
 constraint without checking that field.
 
 ---
@@ -488,13 +488,13 @@ Possible soft constraints include:
 - Use of large halls for small classes.
 - Uneven teaching distribution.
 - Lack of schedule compactness.
+- Avoidable evening, Saturday and Sunday assignments.
 
-Do not automatically penalize:
-
-- Saturday.
-- Sunday.
-- Consecutive valid sessions.
-- Movement between university buildings.
+Do not make Saturday, Sunday, or evening sessions invalid solely because of
+their time. Apply any default avoidance only through configurable soft weights,
+and waive the matching default weight when the lecturer explicitly prefers the
+day or slot. Do not automatically penalize consecutive valid sessions or
+movement between university buildings.
 
 Official time slots already provide adequate transition time.
 
@@ -1004,7 +1004,7 @@ At minimum, unit tests must cover:
 - Invalid candidate never outranks a valid candidate.
 - Soft-cost breakdown matches the total.
 - Configurable weights affect ranking.
-- Saturday and Sunday receive no default penalty.
+- Default evening/weekend avoidance is configurable and an explicit lecturer preference waives the matching default penalty.
 
 Use small datasets whose expected solution can be checked manually.
 

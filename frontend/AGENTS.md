@@ -489,7 +489,9 @@ Monday through Sunday are valid teaching days.
 
 Do not mark Saturday or Sunday as invalid.
 
-Do not add a default warning simply because a class is scheduled on a weekend.
+Saturday, Sunday, and evening classes may be shown as less preferred only when
+the active GA configuration applies the relevant soft weight and the lecturer
+has not explicitly preferred that day or slot. They must not be shown as errors.
 
 The interface may visually distinguish weekends, but weekend classes are
 normal valid classes.

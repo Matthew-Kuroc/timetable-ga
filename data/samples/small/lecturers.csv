@@ -1,4 +1,5 @@
-lecturer_code,lecturer_name,preferred_slots,max_days_per_week,max_consecutive_sessions
-GV001,Giảng viên mẫu 1,MON_AM_01|WED_AM_01,3,2
-GV002,Giảng viên mẫu 2,TUE_AM_01|THU_PM_01,3,2
-GV003,Giảng viên mẫu 3,MON_PM_01|FRI_AM_01,3,2
+lecturer_code,lecturer_name,preferred_days,preferred_slots,undesired_days,undesired_slots,max_days_per_week,max_consecutive_sessions
+GV001,Giảng viên mẫu 1,2|4,MON_1_3|WED_4_6,,,3,2
+GV002,Giảng viên mẫu 2,3|7,TUE_1_3|SAT_1_6,5,THU_7_9,3,2
+GV003,Giảng viên mẫu 3,6|8,FRI_1_5|SUN_2_6,,,3,2
+GV004,Giảng viên mẫu 4,2|5,MON_10_12|THU_7_9,,,3,2

@@ -214,5 +214,9 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Local project notes
+docs/backlog/
+data/runtime/
+
 # Streamlit
 .streamlit/secrets.toml

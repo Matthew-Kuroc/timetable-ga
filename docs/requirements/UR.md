@@ -1,4 +1,4 @@
-# User Requirements Specification
+﻿# User Requirements Specification
 
 ## 1. Document Information
 
@@ -39,7 +39,6 @@ The system is needed because manual scheduling becomes time-consuming and diffic
 | --- | --- | --- |
 | Training Department / Manager | Import and validate data; configure and run GA; view all schedules; handle change requests; export results. | May apply changes only after valid data and hard constraints are checked. |
 | Lecturer | Log in; view personal weekly timetable; view class details; submit and track suspend/move requests. | Cannot add classes, delete classes, reject classes, directly edit official timetables or view another lecturer's personal schedule. |
-| Technical administrator | Manage accounts, roles, technical configuration and support operation. | Must not change timetable business data without Training Department authority. |
 | Faculty | Provide teaching assignment data and related information. | In the internship version, may only be a data provider and may not need a dedicated account. |
 | Supervisor / tester | Provide sample data, test functions, evaluate algorithm results and confirm requirements. | May not be a regular system operator. |
 | Student team | Analyze, design, implement, test, document and deliver the product. | Must not invent unconfirmed business rules. |
@@ -123,7 +122,7 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 | Code | Requirement | Priority | Status |
 | --- | --- | --- | --- |
 | UR-AUTH-01 | Users need to log in with a valid account before accessing protected features. | Must | Identified |
-| UR-AUTH-02 | Training Department, lecturer and technical administrator users need to see only features for their roles. | Must | Needs supervisor confirmation |
+| UR-AUTH-02 | Training Office and lecturer users need to see only features for their roles. | Must | Needs supervisor confirmation |
 | UR-AUTH-03 | Lecturers may only view their personal timetable and operate on classes assigned to them. | Must | Identified |
 | UR-AUTH-04 | Lecturers must not directly add classes, delete classes, reject classes or edit timetable data. | Must | Identified |
 | UR-AUTH-05 | Users need to log out and end a session safely. | Must | Team proposal |
@@ -132,12 +131,12 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 
 | Code | Requirement | Priority | Status |
 | --- | --- | --- | --- |
-| UR-DATA-01 | Training Department needs to upload CSV files for teaching assignments, rooms, time slots and additional constraints. | Must | Identified |
+| UR-DATA-01 | Training Department needs to upload one complete seven-file CSV batch exported from Excel for teaching assignments, rooms, time slots, calendar and additional constraints. | Must | Clarified from internship topic |
 | UR-DATA-02 | Training Department needs to preview headers and sample rows before saving. | Must | Identified |
 | UR-DATA-03 | Users need clear row, column, value and reason messages when data is invalid. | Must | Identified |
 | UR-DATA-04 | Invalid data must not be passed to the algorithm before being fixed or confirmed according to rules. | Must | Identified |
-| UR-DATA-05 | Training Department needs to confirm before saving or overwriting an import batch. | Must | Team proposal |
-| UR-DATA-06 | Training Department needs to choose the correct dataset batch for each GA run. | Must | Team proposal |
+| UR-DATA-05 | Training Department needs to confirm a valid batch before saving it. Editing a saved batch creates a new version instead of changing data used by an earlier run. | Must | Clarified from internship topic |
+| UR-DATA-06 | Training Department needs to choose the confirmed dataset batch for each GA run; the sample dataset is only for development and demonstration. | Must | Clarified from internship topic |
 | UR-DATA-07 | When real files use different column names, users need a mapping option or clear instructions to fix the file. | Should | Needs supervisor confirmation |
 | UR-DATA-08 | Training Department should be able to download an error report for offline correction. | Should | Team proposal |
 
@@ -146,7 +145,7 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 | Code | Requirement | Priority | Status |
 | --- | --- | --- | --- |
 | UR-GA-01 | Training Department needs to configure population size, number of generations, crossover rate and mutation rate. | Must | Identified |
-| UR-GA-02 | Training Department needs to configure priorities or weights for soft constraints. | Must | Identified |
+| UR-GA-02 | Training Department needs to configure priorities or weights for soft constraints, including avoidance of evening, Saturday and Sunday slots. | Must | Clarified from internship topic |
 | UR-GA-03 | The system may run only when required data is available and must show missing data reasons. | Must | Identified |
 | UR-GA-04 | The system needs to generate a timetable option or report failure with a reason. | Must | Identified |
 | UR-GA-05 | Users need to know whether a run is pending, running, completed, failed or stopped. | Must | Identified |
@@ -202,7 +201,7 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 - Each session must use a valid time slot.
 - Room type must match the course-section requirement.
 - Room capacity must be greater than or equal to the scheduling student count.
-- A lecturer must not be scheduled in a mandatory unavailable slot.
+- A lecturer must not be scheduled in an officially confirmed fixed restriction. Lecturer self-declared unavailable or undesired times before course registration are treated as soft preferences unless confirmed by the Training Department.
 - A room must not be scheduled in an unavailable slot.
 - Every session must have a course section, lecturer, room and time slot.
 - Sessions must stay within allowed teaching weeks.
@@ -214,7 +213,8 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 - Avoid too many consecutive sessions for one lecturer.
 - Reduce gaps between sessions in the same day.
 - Distribute teaching load reasonably across the week.
-- Avoid night, Saturday or Sunday sessions when unnecessary.
+- Prefer weekday and daytime sessions through configurable soft weights when no lecturer-specific preference applies. Saturday, Sunday and evening sessions remain valid and may be selected when necessary.
+- Do not penalize a Saturday, Sunday or evening slot for a lecturer who explicitly prefers that day or slot.
 - Prefer rooms whose capacity is close to class size to reduce waste.
 - Avoid frequent campus changes for one lecturer when campus data exists.
 - Keep sessions of the same course section stable where possible.
@@ -236,7 +236,7 @@ The SRS draft marks this rule as clarified, while the UR draft still lists it as
 | Course sections | Course code/name, section code, lecturer, number of sessions, periods per session, student counts, type, weeks and optional campus/notes. |
 | Rooms | Room code/name, capacity, room type, campus, availability and unavailable slots. |
 | Time slots | Slot code, day of week, start period, end period, session type and active flag. |
-| Lecturers | Lecturer code/name, unavailable slots, preferred slots and optional workload preferences. |
+| Lecturers | Lecturer code/name, preferred slots, undesired slots and optional workload preferences. Officially confirmed fixed restrictions may be recorded separately by the Training Department. |
 | Additional constraints | Rules or preferences not represented in the core CSV groups. |
 
 ## 12. Expected Data Validation
