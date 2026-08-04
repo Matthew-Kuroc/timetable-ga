@@ -219,5 +219,10 @@ docs/backlog/
 De tai thục tap.docx
 data/runtime/
 
+# Frontend dependencies and generated Vite build metadata
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
 # Streamlit
 .streamlit/secrets.toml

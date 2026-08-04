@@ -14,6 +14,20 @@ running GA. Each confirmed batch must be versioned or snapshotted so a later
 upload cannot alter a previous GA run. `data/samples/official` is only a
 development and demonstration fixture, never the normal runtime input source.
 
+### Confirmed-batch metadata
+
+Before confirming a valid seven-file batch, the Training Office may enter a
+human-readable **dataset name**. It may also record the semester, academic
+year and an optional note; when skipped, the system assigns a neutral display
+name. The system assigns a technical `batch_code` and
+records `created_at` and `confirmed_at` as timezone-aware timestamps. The
+interface displays confirmation time in `Asia/Ho_Chi_Minh` so users can
+distinguish multiple imports from the same day.
+
+When a confirmed batch is edited, the system creates an immutable new version
+with its parent batch and incremented version number; it must not overwrite
+the historical batch used by an existing GA run.
+
 | File | Purpose | Required |
 | --- | --- | --- |
 | `lecturers.csv` | Lecturer master data and soft preferences. | Yes |

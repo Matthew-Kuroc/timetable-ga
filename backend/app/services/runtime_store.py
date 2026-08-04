@@ -33,7 +33,14 @@ BATCH_ROOT = RUNTIME_ROOT / "batches"
 RUN_ROOT = RUNTIME_ROOT / "runs"
 
 
-def create_confirmed_batch(source_directory: Path, note: str = "") -> dict[str, object]:
+def create_confirmed_batch(
+    source_directory: Path,
+    *,
+    display_name: str = "",
+    semester: str = "",
+    academic_year: str = "",
+    note: str = "",
+) -> dict[str, object]:
     validation = validate_sample_dataset(source_directory)
     if not validation.is_valid:
         raise HTTPException(status_code=422, detail={"message": "Bộ CSV chưa hợp lệ.", "errors": errors_payload(validation)})
@@ -41,7 +48,19 @@ def create_confirmed_batch(source_directory: Path, note: str = "") -> dict[str, 
     target = BATCH_ROOT / batch_code
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source_directory, target)
-    manifest = {"batch_code": batch_code, "status": "CONFIRMED", "note": note.strip(), "created_at": _now(), "files": list(REQUIRED_DATASET_FILES)}
+    confirmed_at = _now()
+    manifest = {
+        "batch_code": batch_code,
+        "display_name": display_name.strip() or "Bộ dữ liệu đã xác nhận",
+        "semester": semester.strip(),
+        "academic_year": academic_year.strip(),
+        "version_number": 1,
+        "status": "CONFIRMED",
+        "note": note.strip(),
+        "created_at": confirmed_at,
+        "confirmed_at": confirmed_at,
+        "files": list(REQUIRED_DATASET_FILES),
+    }
     _write_json(target / "manifest.json", manifest)
     _persist_snapshot(manifest, target)
     return batch_summary(batch_code)
@@ -64,7 +83,17 @@ def batch_summary(batch_code: str) -> dict[str, object]:
     directory = batch_directory(batch_code)
     manifest = _read_json(directory / "manifest.json")
     validation = validate_sample_dataset(directory)
-    return {**manifest, "valid": validation.is_valid, "file_count": len(REQUIRED_DATASET_FILES), "section_count": len(validation.data.course_sections) if validation.data else 0}
+    return {
+        **manifest,
+        "display_name": str(manifest.get("display_name") or "Bộ dữ liệu đã xác nhận"),
+        "semester": str(manifest.get("semester") or ""),
+        "academic_year": str(manifest.get("academic_year") or ""),
+        "version_number": int(manifest.get("version_number") or 1),
+        "confirmed_at": str(manifest.get("confirmed_at") or manifest.get("created_at") or ""),
+        "valid": validation.is_valid,
+        "file_count": len(REQUIRED_DATASET_FILES),
+        "section_count": len(validation.data.course_sections) if validation.data else 0,
+    }
 
 
 def read_batch_file(batch_code: str, file_name: str) -> dict[str, object]:
@@ -87,7 +116,15 @@ def update_batch_file(batch_code: str, file_name: str, rows: list[dict[str, str]
         raise HTTPException(status_code=422, detail={"message": "Không thể lưu vì bộ CSV có dữ liệu không hợp lệ.", "errors": errors_payload(validation)})
     manifest = _read_json(staged / "manifest.json")
     new_batch_code = f"BATCH-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid4().hex[:6].upper()}"
-    manifest.update({"batch_code": new_batch_code, "parent_batch_code": batch_code, "created_at": _now(), "note": f"Phiên bản chỉnh sửa từ {batch_code}"})
+    confirmed_at = _now()
+    manifest.update({
+        "batch_code": new_batch_code,
+        "parent_batch_code": batch_code,
+        "version_number": int(manifest.get("version_number") or 1) + 1,
+        "created_at": confirmed_at,
+        "confirmed_at": confirmed_at,
+        "note": f"Phiên bản chỉnh sửa từ {batch_code}",
+    })
     _write_json(staged / "manifest.json", manifest)
     target = directory.parent / new_batch_code
     staged.rename(target)
@@ -165,7 +202,7 @@ def persist_ga_run(batch_code: str, payload: dict[str, object], input_data: obje
             configuration = payload.get("configuration") if isinstance(payload.get("configuration"), dict) else {}
             batch = session.scalar(select(ImportBatchModel).where(ImportBatchModel.batch_code == batch_code))
             if batch is None:
-                batch = ImportBatchModel(batch_code=batch_code, status="CONFIRMED", note="CSV snapshot")
+                batch = ImportBatchModel(batch_code=batch_code, display_name=batch_code, status="CONFIRMED", note="CSV snapshot")
                 session.add(batch)
                 session.flush()
             lecturers = {}
@@ -267,7 +304,24 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 def _persist_snapshot(manifest: dict[str, object], path: Path) -> None:
     try:
         with get_session_local()() as session:
+            batch = session.scalar(select(ImportBatchModel).where(ImportBatchModel.batch_code == manifest["batch_code"]))
+            if batch is None:
+                session.add(ImportBatchModel(
+                    batch_code=str(manifest["batch_code"]),
+                    display_name=str(manifest.get("display_name") or manifest["batch_code"]),
+                    semester=str(manifest.get("semester") or "") or None,
+                    academic_year=str(manifest.get("academic_year") or "") or None,
+                    version_number=int(manifest.get("version_number") or 1),
+                    status="CONFIRMED",
+                    note=str(manifest.get("note") or "") or None,
+                    uploaded_at=_parse_timestamp(str(manifest.get("created_at") or _now())),
+                    confirmed_at=_parse_timestamp(str(manifest.get("confirmed_at") or _now())),
+                ))
             session.execute(text("""insert into dataset_snapshots (batch_code, parent_batch_code, snapshot_path, manifest, created_at) values (:batch_code, :parent_batch_code, :snapshot_path, cast(:manifest as json), now()) on conflict (batch_code) do nothing"""), {"batch_code": manifest["batch_code"], "parent_batch_code": manifest.get("parent_batch_code"), "snapshot_path": str(path), "manifest": json.dumps(manifest)})
             session.commit()
     except Exception:
         return
+
+
+def _parse_timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
