@@ -7,9 +7,9 @@
 | Project | Teaching Timetable Scheduling Application Using Genetic Algorithm |
 | Document | User Requirements Specification (URS) |
 | Source file | `D:\DoAn\DuAn\TaiLieu_UR.docx` |
-| Version | 0.1 draft |
+| Version | 0.2 draft |
 | Created | 09/07/2026 |
-| Status | Draft, pending supervisor review and confirmation |
+| Status | Draft; three-role expansion recorded, pending supervisor review and confirmation |
 
 ## 2. Purpose
 
@@ -37,6 +37,7 @@ The system is needed because manual scheduling becomes time-consuming and diffic
 
 | Stakeholder | Main needs | Responsibility / limitation |
 | --- | --- | --- |
+| Administrator | Provision and manage accounts; assign roles; activate or deactivate access. | Does not operate timetable generation or change timetable data unless explicitly granted the Training Department role. |
 | Training Department / Manager | Import and validate data; configure and run GA; view all schedules; handle change requests; export results. | May apply changes only after valid data and hard constraints are checked. |
 | Lecturer | Log in; view personal weekly timetable; view class details; submit and track suspend/move requests. | Cannot add classes, delete classes, reject classes, directly edit official timetables or view another lecturer's personal schedule. |
 | Faculty | Provide teaching assignment data and related information. | In the internship version, may only be a data provider and may not need a dedicated account. |
@@ -49,6 +50,7 @@ The system is needed because manual scheduling becomes time-consuming and diffic
 
 - Desktop web application.
 - Login and role-based access control.
+- Administrator account provisioning and user/role management; no public, student or external-user login.
 - CSV import, preview, validation and storage for teaching assignments, rooms, time slots and additional constraints.
 - Genetic Algorithm configuration and execution.
 - Hard-constraint checking and soft-constraint evaluation.
@@ -122,10 +124,12 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 | Code | Requirement | Priority | Status |
 | --- | --- | --- | --- |
 | UR-AUTH-01 | Users need to log in with a valid account before accessing protected features. | Must | Identified |
-| UR-AUTH-02 | Training Office and lecturer users need to see only features for their roles. | Must | Needs supervisor confirmation |
-| UR-AUTH-03 | Lecturers may only view their personal timetable and operate on classes assigned to them. | Must | Identified |
-| UR-AUTH-04 | Lecturers must not directly add classes, delete classes, reject classes or edit timetable data. | Must | Identified |
-| UR-AUTH-05 | Users need to log out and end a session safely. | Must | Team proposal |
+| UR-AUTH-02 | The system must support three roles: Administrator, Training Office and Lecturer, with separate permissions and navigation. | Must | Needs supervisor confirmation |
+| UR-AUTH-03 | Administrators need to create, update, activate/deactivate and assign roles to approved user accounts. | Must | Team proposal |
+| UR-AUTH-04 | The system must reject students, unprovisioned accounts and outside users; there is no public self-registration. | Must | Team proposal |
+| UR-AUTH-05 | Lecturers may only view their personal timetable and operate on classes assigned to them. | Must | Identified |
+| UR-AUTH-06 | Lecturers must not directly add classes, delete classes, reject classes or edit timetable data. | Must | Identified |
+| UR-AUTH-07 | Users need to log out and end a session safely. | Must | Team proposal |
 
 ### 9.2 Data Import and Management
 
@@ -164,6 +168,7 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 | UR-VIEW-05 | Each calendar item needs to show or open details for course, section, date/week, slot/period and room. | Must | Identified |
 | UR-VIEW-06 | Users should be able to filter by lecturer, room, section, date or week. | Should | Team proposal |
 | UR-VIEW-07 | Training Department should see the count and type of soft violations for an option. | Should | Team proposal |
+| UR-VIEW-08 | Lecturer timetable should be presented in a personal weekly calendar with week navigation, session details and clear empty/loading/error states. | Must | Team proposal |
 
 ### 9.5 Timetable Change Requests
 
@@ -270,6 +275,9 @@ The SRS draft marks this rule as clarified, while the UR draft still lists it as
 - Lecturer can view personal weekly timetable.
 - At least one session change workflow can be submitted, checked and applied or rejected correctly.
 - Timetable can be exported to CSV or Excel.
+- Administrator can provision an approved account and assign one of the three roles; students and outside users cannot log in.
+- Each role sees only its permitted portal and operations.
+- Lecturer can use a weekly calendar, view assigned sessions and submit a timetable-change request.
 - Experiment metrics can be collected for at least small and medium datasets.
 
 ## 15. Confirmation Checklist
@@ -282,6 +290,8 @@ The SRS draft marks this rule as clarified, while the UR draft still lists it as
 - [ ] Initial soft constraints and weights have been confirmed.
 - [ ] Dataset scale and run-time criteria have been confirmed.
 - [ ] Export file format has been confirmed.
+- [ ] Three-role permission matrix and account-provisioning policy have been confirmed.
+- [ ] Lecturer calendar layout and supported week/session interactions have been confirmed.
 - [ ] Demo and delivery requirements have been confirmed.
 - [ ] Conclusions have been updated into URS 1.0 and SRS 1.0.
 

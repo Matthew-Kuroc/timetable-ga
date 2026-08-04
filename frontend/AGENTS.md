@@ -29,13 +29,29 @@ The backend remains authoritative for:
 
 ## 2. Supported Users
 
-The application has two primary user roles:
+The application has three role types:
+
+- `ADMIN`: Quản trị viên.
 
 - `TRAINING_OFFICE`: Phòng đào tạo.
 - `LECTURER`: Giảng viên.
 
-Do not introduce a separate technical-administrator interface into the MVP
-unless the URS and SRS are formally updated.
+The Administrator interface is limited to approved account and role
+management. It must not expose timetable-operation controls unless the user
+also has the Training Office role. The system must not provide student,
+outside-user or public self-registration access.
+
+Do not introduce another role unless the URS and SRS are formally updated.
+
+### Administrator
+
+The Administrator frontend may provide:
+
+- Sign-in and sign-out.
+- User-account list, search and status filters.
+- Account creation and role assignment.
+- Account activation/deactivation.
+- Account and authentication audit history.
 
 ### Training Office
 
@@ -215,6 +231,7 @@ Define explicit types for API contracts and important domain objects.
 Examples:
 
     type UserRole =
+      | "ADMIN"
       | "TRAINING_OFFICE"
       | "LECTURER";
 
@@ -264,6 +281,7 @@ Role-specific pages must verify the current user's role.
 Recommended route groups:
 
     /training-office/*
+    /admin/*
     /lecturer/*
 
 When the session expires:
@@ -285,6 +303,14 @@ Do not:
 ## 8. Navigation
 
 Navigation must reflect the current role.
+
+### Administrator navigation
+
+Recommended items:
+
+- Quản lý tài khoản
+- Phân quyền
+- Lịch sử xác thực và thay đổi tài khoản
 
 ### Training Office navigation
 

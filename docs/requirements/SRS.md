@@ -7,9 +7,9 @@
 | Project | Teaching Timetable Scheduling Application Using Genetic Algorithm |
 | Document | Software Requirements Specification (SRS) |
 | Source file | `D:\DoAn\DuAn\TaiLieu_SRS.docx` |
-| Version | 0.2 draft |
+| Version | 0.3 draft |
 | Created | 08/07/2026 |
-| Status | Draft, pending supervisor review and confirmation |
+| Status | Draft; three-role expansion recorded, pending supervisor review and confirmation |
 
 ## 2. Purpose
 
@@ -23,6 +23,8 @@ This document specifies software requirements for a web application that support
 - Genetic Algorithm configuration and execution.
 - Timetable views by lecturer, room and course section.
 - Login, authorization and lecturer weekly personal timetable.
+- Administrator account provisioning, role assignment and account activation/deactivation.
+- Separate role-specific portals for Administrator, Training Department and Lecturer; no student or public account access.
 - Lecturer requests to suspend, move one session or move a whole recurring schedule within the allowed period.
 - Training Department approval/rejection of change requests.
 - Conflict checking before applying changes.
@@ -43,6 +45,7 @@ This document specifies software requirements for a web application that support
 
 | Actor | Main permissions | Limits |
 | --- | --- | --- |
+| Administrator | Log in; create and manage approved user accounts; assign Administrator, Training Office or Lecturer roles; activate/deactivate access; view account/audit information. | Does not upload data, run GA or edit official timetables unless separately granted the Training Office role. Cannot create student or public accounts. |
 | Training Department / Manager | Log in; import data; configure and run GA; view all schedules; receive, check, approve or reject change requests; apply changes; export data; view run and request history. | May apply changes only after data is valid and hard constraints are checked. |
 | Lecturer | Log in; view personal weekly timetable; view class details; submit suspend/move requests; track request status. | Cannot directly edit timetables, add classes, delete classes, reject classes, approve requests or edit another lecturer's timetable. |
 | Supervisor / tester | Provide data, test functions and evaluate results. | May not be a regular operational account. |
@@ -138,10 +141,12 @@ This document specifies software requirements for a web application that support
 | Code | Requirement | Priority | Acceptance criteria |
 | --- | --- | --- | --- |
 | FR-AUTH-01 | System allows users to log in with a valid account. | Must | Correct account can access; incorrect account is rejected with a message. |
-| FR-AUTH-02 | System identifies Training Office and lecturer roles for the MVP. | Must | Each account only sees functions for its role. |
-| FR-AUTH-03 | Lecturers can only view personal schedules, submit requests for assigned classes and cannot directly edit timetables. | Must | API and UI reject unauthorized access or updates. |
-| FR-AUTH-04 | Training Department can view, approve, reject and apply change requests after validation. | Must | Only the correct role can access approval features. |
-| FR-AUTH-05 | System allows logout and session termination. | Must | Protected pages require login again after logout. |
+| FR-AUTH-02 | System identifies Administrator, Training Office and Lecturer roles. | Must | Each account only sees functions for its role. |
+| FR-AUTH-03 | Administrators can create, update, activate/deactivate and assign roles to approved user accounts. | Must | Account changes are restricted to Administrators and are auditable. |
+| FR-AUTH-04 | System rejects students, unprovisioned accounts and outside users; public self-registration is not available. | Must | Login is denied with a safe message and no protected data is exposed. |
+| FR-AUTH-05 | Lecturers can only view personal schedules, submit requests for assigned classes and cannot directly edit timetables. | Must | API and UI reject unauthorized access or updates. |
+| FR-AUTH-06 | Training Department can view, approve, reject and apply change requests after validation. | Must | Only the correct role can access approval features. |
+| FR-AUTH-07 | System allows logout and session termination. | Must | Protected pages require login again after logout. |
 
 ### 8.2 Data Import
 
@@ -184,6 +189,7 @@ This document specifies software requirements for a web application that support
 | FR-VIEW-05 | User can open session details. | Should | Full information and status are shown. |
 | FR-VIEW-06 | System supports filtering by lecturer, room, section, date or week. | Should | Filtered results are correct and filters can be cleared. |
 | FR-VIEW-07 | System shows soft-violation warnings for an option. | Should | Manager can see count and type of violations. |
+| FR-VIEW-08 | Lecturer portal provides a personal weekly calendar with week navigation and session details. | Must | Only assigned sessions are shown; empty, loading and error states are handled. |
 
 ### 8.5 Change Requests
 
@@ -219,6 +225,15 @@ This document specifies software requirements for a web application that support
 | FR-AUD-02 | Manager can view configuration and metrics of each run. | Must | Shows parameters, fitness, time, seed and violation counts. |
 | FR-AUD-03 | Manager can compare at least two runs. | Could | Shows comparison table of key metrics. |
 | FR-AUD-04 | System logs important technical and business errors. | Should | Logs contain timestamp, level and enough diagnostic information. |
+
+### 8.8 User and Role Administration
+
+| Code | Requirement | Priority | Acceptance criteria |
+| --- | --- | --- | --- |
+| FR-ADMIN-01 | Administrator can list and search user accounts by name, username, role and status. | Must | Results are limited to approved account records. |
+| FR-ADMIN-02 | Administrator can create an account and assign exactly one application role. | Must | Invalid roles and duplicate usernames are rejected. |
+| FR-ADMIN-03 | Administrator can activate or deactivate an account without deleting audit history. | Must | Deactivated users cannot create a session. |
+| FR-ADMIN-04 | Administrator actions are recorded with actor, time, target account, old value and new value where applicable. | Should | Audit record is available for review. |
 
 ## 9. Scheduling Constraints
 
@@ -265,6 +280,7 @@ This document specifies software requirements for a web application that support
 | NFR-SEC-01 | Security | Passwords must not be stored in plain text; use suitable hashing if login is implemented. | Must |
 | NFR-SEC-02 | Security | All APIs must check permissions, not only hide frontend controls. | Must |
 | NFR-SEC-03 | Security | Uploaded files must be checked for type, size and safe filename. | Must |
+| NFR-SEC-04 | Security | There is no public self-registration or student/external-user login; only Administrator-provisioned active accounts may access the application. | Must |
 | NFR-REL-01 | Reliability | Schedule changes must not be saved if hard-constraint checking fails. | Must |
 | NFR-REL-02 | Reliability | Failure in one run must not corrupt input data or results from previous runs. | Must |
 | NFR-REL-03 | Reliability | System should record failure status and diagnostic information. | Should |
@@ -290,14 +306,16 @@ This document specifies software requirements for a web application that support
 9. Training Department can approve or reject a change request after conflict checking.
 10. A change that violates hard constraints is not saved.
 11. Timetable can be exported to UTF-8 CSV and `.xlsx`.
-12. Source code, sample data, installation guide and experiment results are available for handoff.
+12. Administrator can manage approved accounts and role assignments without exposing timetable operations to unauthorized roles.
+13. Source code, sample data, installation guide and experiment results are available for handoff.
 
 ## 12. Test Strategy
 
 - Unit tests for CSV validation, conflict checking, hard constraints, soft scoring and fitness function.
 - Integration tests for import flow, GA run flow, timetable query flow, export flow and change-request workflow.
-- Permission tests for lecturer-only and manager-only operations.
+- Permission tests for administrator, lecturer-only and Training Department-only operations.
 - UI tests or manual test scripts for the main MVP flows.
+- UI tests or manual scripts for role-specific navigation, the lecturer weekly calendar and administrator account management.
 - Performance experiments with small, medium and larger/supervisor-provided datasets.
 
 ## 13. Test Dataset Levels
@@ -312,7 +330,8 @@ This document specifies software requirements for a web application that support
 
 | Requirement group | Planned module | Use case / workflow | Test group |
 | --- | --- | --- | --- |
-| FR-AUTH | Authentication / Authorization | Login, role-based access, lecturer personal timetable, request handling | Security, integration |
+| FR-AUTH | Authentication / Authorization | Login, three-role access, lecturer personal timetable, request handling | Security, integration, permission |
+| FR-ADMIN | User and Role Administration | Provision accounts, assign roles, activate/deactivate users, audit account changes | Integration, permission, security |
 | FR-DATA | Import Service, Validation Service | CSV import and validation | Unit, integration, system |
 | FR-GA | GA Engine, Run Service | Configure, run and re-run GA | Unit, performance, system |
 | FR-VIEW | Schedule Query, Frontend Calendar | Timetable views | Integration, UI |
@@ -332,6 +351,9 @@ This document specifies software requirements for a web application that support
 - Lecturers can submit requests but cannot directly change official timetables.
 - Training Department approval is required before applying changes.
 - Authorization must be enforced by backend APIs.
+- Only Administrator-provisioned active accounts may log in; students and outside users are not application actors.
+- Administrator, Training Department and Lecturer are the proposed application roles; the permission matrix and account-lifecycle policy require supervisor confirmation.
+- Lecturer portal uses a weekly calendar with week navigation; the exact visual design remains an implementation decision.
 - The Training Department prepares the complete seven-file CSV batch in Excel, previews and validates it, then confirms it before it can be used by GA. Built-in sample data is only for development and demonstration.
 - A default soft policy may discourage evening, Saturday and Sunday assignments. These assignments remain valid, and lecturer-specific preferred days or slots override the matching default penalty.
 
@@ -344,4 +366,5 @@ This document specifies software requirements for a web application that support
 - Make-up class rules after suspension need confirmation.
 - Initial soft-constraint weights need confirmation.
 - Run-time targets depend on actual machine and dataset scale.
+- Authentication provider, password-reset policy and whether an Administrator may also hold the Training Office role need confirmation.
 

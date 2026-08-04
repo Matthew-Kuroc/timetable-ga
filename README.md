@@ -95,9 +95,24 @@ thời gian và các nguyện vọng liên quan.
 
 ## 3. Người dùng hệ thống
 
-Phiên bản thực tập có hai vai trò vận hành chính.
+Phiên bản mở rộng của dự án có ba vai trò được phân quyền rõ ràng: Quản trị
+viên, Phòng đào tạo và Giảng viên. Chỉ tài khoản được Quản trị viên cấp mới
+được phép đăng nhập; hệ thống không phục vụ tài khoản sinh viên hoặc người
+ngoài.
 
-### 3.1. Phòng đào tạo
+### 3.1. Quản trị viên
+
+Quản trị viên có thể:
+
+- Cấp tài khoản cho người dùng đã được phê duyệt.
+- Gán một trong các role `ADMIN`, `TRAINING_OFFICE` hoặc `LECTURER`.
+- Tìm kiếm, cập nhật, kích hoạt hoặc vô hiệu hóa tài khoản.
+- Xem lịch sử thay đổi tài khoản và hoạt động xác thực.
+
+Quản trị viên không mặc nhiên được upload dữ liệu, chạy GA hoặc chỉnh sửa
+thời khóa biểu nếu chưa được cấp thêm quyền Phòng đào tạo.
+
+### 3.2. Phòng đào tạo
 
 Phòng đào tạo có thể:
 
@@ -117,7 +132,7 @@ Phòng đào tạo có thể:
 - Xuất kết quả ra CSV hoặc Excel.
 - Xem lịch sử chạy và lịch sử thay đổi.
 
-### 3.2. Giảng viên
+### 3.3. Giảng viên
 
 Giảng viên có thể:
 
@@ -145,6 +160,7 @@ Giảng viên không được:
 
 - Ứng dụng web dành cho máy tính.
 - Đăng nhập và phân quyền.
+- Quản lý tài khoản và role theo quyền Quản trị viên.
 - Nhập, xem trước và kiểm tra CSV.
 - Quản lý dữ liệu phân công giảng dạy.
 - Quản lý giảng viên và nguyện vọng.
@@ -154,6 +170,8 @@ Giảng viên không được:
 - Quản lý lịch học kỳ và ngày nghỉ.
 - Cấu hình và chạy thuật toán Di truyền.
 - Hiển thị kết quả theo nhiều góc nhìn.
+- Cổng riêng cho Giảng viên với lịch tuần dạng calendar, chuyển tuần và xem chi tiết buổi dạy.
+- Cổng quản lý tài khoản cho Quản trị viên.
 - Chạy lại thuật toán để tạo phương án mới.
 - Chọn phương án thời khóa biểu.
 - Chỉnh sửa một buổi học.
