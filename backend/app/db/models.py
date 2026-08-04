@@ -14,9 +14,14 @@ class ImportBatchModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     batch_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    semester: Mapped[str | None] = mapped_column(String(50))
+    academic_year: Mapped[str | None] = mapped_column(String(30))
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="UPLOADED")
     note: Mapped[str | None] = mapped_column(Text)
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     course_sections: Mapped[list[CourseSectionModel]] = relationship(back_populates="import_batch")
     ga_runs: Mapped[list[GaRunModel]] = relationship(back_populates="import_batch")

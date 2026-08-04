@@ -811,7 +811,7 @@ chưa được kiểm thử đầy đủ.
 
 ---
 
-## 17. Công nghệ dự kiến
+## 17. Công nghệ sử dụng
 
 Công nghệ có thể được điều chỉnh trong quá trình triển khai, miễn là không làm
 thay đổi yêu cầu nghiệp vụ.
@@ -826,10 +826,33 @@ thay đổi yêu cầu nghiệp vụ.
 
 ### Frontend
 
-- React.
+- React 19.
 - TypeScript.
-- Thư viện gọi API và quản lý trạng thái phù hợp.
-- Framework kiểm thử frontend phù hợp.
+- Vite để phát triển và đóng gói frontend.
+- CSS thuần theo hệ thống thiết kế riêng, responsive cho màn hình nhỏ.
+- Lớp API có kiểu dữ liệu tập trung, gọi REST API do FastAPI cung cấp.
+
+### Chạy giao diện React
+
+Trong cửa sổ terminal thứ nhất, chạy API FastAPI:
+
+```powershell
+$env:PYTHONPATH='.'
+python -m uvicorn backend.app.main:app --reload
+```
+
+Trong cửa sổ terminal thứ hai, chạy Vite để phát triển giao diện (Vite tự
+chuyển các yêu cầu `/api` sang FastAPI):
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Để đóng gói giao diện cho FastAPI phục vụ trực tiếp, chạy `npm run build`
+trong thư mục `frontend`. Thư mục `frontend/dist` là đầu ra sinh tự động và
+không được commit.
 
 ### Cơ sở dữ liệu
 

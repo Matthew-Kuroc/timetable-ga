@@ -28,6 +28,27 @@ def test_editing_confirmed_batch_creates_new_version(tmp_path, monkeypatch) -> N
     assert runtime_store.read_batch_file(updated_code, "lecturers.csv")["rows"][0]["lecturer_name"] == "Tên phiên bản mới"
 
 
+def test_confirmed_batch_keeps_display_metadata_and_confirmation_time(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(runtime_store, "RUNTIME_ROOT", tmp_path / "runtime")
+    monkeypatch.setattr(runtime_store, "BATCH_ROOT", tmp_path / "runtime" / "batches")
+    source = tmp_path / "source"
+    shutil.copytree(REPO_ROOT / "data" / "samples" / "small", source)
+
+    batch = runtime_store.create_confirmed_batch(
+        source,
+        display_name="TKB Học kỳ 1 — Đợt đăng ký 1",
+        semester="Học kỳ 1",
+        academic_year="2026–2027",
+        note="Dữ liệu kiểm tra",
+    )
+
+    assert batch["display_name"] == "TKB Học kỳ 1 — Đợt đăng ký 1"
+    assert batch["semester"] == "Học kỳ 1"
+    assert batch["academic_year"] == "2026–2027"
+    assert batch["version_number"] == 1
+    assert "T" in str(batch["confirmed_at"])
+
+
 def test_list_runs_returns_newest_compact_summaries(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(runtime_store, "RUN_ROOT", tmp_path / "runtime" / "runs")
     first = {

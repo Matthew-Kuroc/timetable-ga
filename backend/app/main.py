@@ -30,12 +30,13 @@ def create_app() -> FastAPI:
     app.include_router(ga_router)
 
     frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
-    if (frontend_dir / "index.html").exists():
-        app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+    frontend_dist_dir = frontend_dir / "dist"
+    if (frontend_dist_dir / "index.html").exists():
+        app.mount("/assets", StaticFiles(directory=frontend_dist_dir / "assets"), name="frontend-assets")
 
         @app.get("/")
         def frontend_index() -> FileResponse:
-            return FileResponse(frontend_dir / "index.html")
+            return FileResponse(frontend_dist_dir / "index.html")
 
     @app.get("/api/health")
     def health_check() -> dict[str, str]:

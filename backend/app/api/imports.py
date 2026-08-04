@@ -4,8 +4,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from backend.app.importing.import_preview import (
     REQUIRED_DATASET_FILES,
@@ -39,13 +38,12 @@ async def preview_csv_dataset(files: list[UploadFile] = File(...)) -> dict[str, 
     return _preview_result_to_response(result)
 
 
-class ConfirmImportRequest(BaseModel):
-    note: str = ""
-
-
 @router.post("/csv/confirm")
 async def confirm_csv_dataset(
     files: list[UploadFile] = File(...),
+    display_name: str = Form("", max_length=120),
+    semester: str = Form("", max_length=50),
+    academic_year: str = Form("", max_length=30),
     note: str = "",
 ) -> dict[str, object]:
     received = {file.filename or "": file for file in files}
@@ -58,7 +56,7 @@ async def confirm_csv_dataset(
         for file_name in REQUIRED_DATASET_FILES:
             with (temp_path / file_name).open("wb") as output:
                 shutil.copyfileobj(received[file_name].file, output)
-        return {"batch": create_confirmed_batch(temp_path, note), "message": "Đã xác nhận bộ dữ liệu. Bạn có thể chỉnh sửa hoặc chạy GA với bộ này."}
+        return {"batch": create_confirmed_batch(temp_path, display_name=display_name, semester=semester, academic_year=academic_year, note=note), "message": "Đã xác nhận bộ dữ liệu. Bạn có thể chỉnh sửa hoặc chạy GA với bộ này."}
 
 
 def _preview_result_to_response(result: DatasetPreviewResult) -> dict[str, object]:
