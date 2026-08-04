@@ -48,7 +48,24 @@ prioritized backlog. It is not a replacement for the URS/SRS.
 
 ## 3. Approved System Users
 
-The runtime application has two primary roles.
+The runtime application now defines three roles: `ADMIN`, `TRAINING_OFFICE`
+and `LECTURER`. The three-role expansion is recorded in the draft URS/SRS and
+remains subject to supervisor confirmation.
+
+### Administrator
+
+The Administrator may:
+
+- Sign in using an account provisioned by an existing Administrator.
+- Create, update, activate or deactivate approved user accounts.
+- Assign `ADMIN`, `TRAINING_OFFICE` or `LECTURER` roles.
+- View account and authentication audit history.
+
+The Administrator must not automatically receive timetable-operation access
+unless the account is also explicitly granted the Training Office role.
+
+The system must not provide student accounts, public self-registration or
+login access for outside users.
 
 ### Training Office
 
@@ -84,7 +101,8 @@ A lecturer must not:
 - Modify another lecturer's timetable.
 - Reject an assigned course section.
 
-Do not introduce a separate technical-administrator role into the MVP unless the requirements are formally changed.
+Do not add any role beyond `ADMIN`, `TRAINING_OFFICE` and `LECTURER` unless the
+requirements are formally changed again.
 
 ---
 
