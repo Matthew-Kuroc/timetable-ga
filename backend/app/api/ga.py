@@ -7,6 +7,7 @@ from html import escape
 from io import StringIO
 from io import BytesIO
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -16,7 +17,19 @@ from backend.app.algorithms.genetic.simple_ga import GeneticAlgorithmConfig, run
 from backend.app.algorithms.genetic.soft_constraints import SoftConstraintWeights
 from backend.app.importing.csv_validator import validate_sample_dataset
 from backend.app.scheduling.calendar_expansion import expand_base_assignments_to_occurrences
-from backend.app.services.runtime_store import batch_directory, create_run, list_runs, persist_change_log, persist_ga_run, read_run, write_run
+from backend.app.services.runtime_store import (
+    batch_directory,
+    create_run,
+    list_official_timetables,
+    list_runs,
+    persist_change_log,
+    persist_ga_run,
+    publish_run_as_official,
+    read_official_timetable,
+    read_run,
+    sync_official_segments_and_makeups,
+    write_official_timetable,
+)
 
 
 router = APIRouter(prefix="/api/ga", tags=["ga"])
@@ -149,6 +162,10 @@ def run_ga_preview(request: GaRunRequest) -> dict[str, object]:
         {"section_code": item.section_code, "room_code": item.room_code, "slot_code": item.slot_code, "date": item.date.isoformat(), "academic_week": item.academic_week, "status": item.status}
         for item in expansion.occurrences
     ]
+    response["skipped_holiday_sessions"] = [
+        {"section_code": item.section_code, "room_code": item.room_code, "slot_code": item.slot_code, "date": item.date.isoformat(), "academic_week": item.academic_week, "holiday_name": item.holiday_name}
+        for item in expansion.skipped_holiday_sessions
+    ]
     if request.batch_code:
         response["batch_code"] = request.batch_code
         response["run_code"] = create_run(response)
@@ -254,82 +271,200 @@ def get_occurrence_adjustment_options(
 
 @router.put("/runs/{run_code}/occurrences")
 def adjust_occurrence(run_code: str, request: OccurrenceAdjustmentRequest) -> dict[str, object]:
-    """Change one dated session without altering its weekly base assignment."""
-    run = read_run(run_code)
-    data_result = validate_sample_dataset(batch_directory(str(run.get("batch_code", ""))))
-    if not data_result.is_valid or data_result.data is None:
-        raise HTTPException(status_code=422, detail="Không thể kiểm tra bộ dữ liệu của lần chạy.")
-    data = data_result.data
-    section = data.course_sections.get(request.section_code)
-    room, slot = data.rooms.get(request.room_code), data.time_slots.get(request.slot_code)
-    occurrences = list(run.get("occurrences", []))
-    target = next((item for item in occurrences if item.get("section_code") == request.section_code and item.get("date") == request.occurrence_date.isoformat()), None)
-    calendar_date = data.academic_calendar_dates.get(request.new_date)
-    if section is None or target is None or room is None or slot is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy buổi học, phòng hoặc khung giờ.")
-    if calendar_date is None or not calendar_date.is_teaching_day or calendar_date.is_holiday or slot.day_of_week != request.new_date.isoweekday() + 1:
-        raise HTTPException(status_code=422, detail="Ngày hoặc khung giờ mới không hợp lệ trong lịch học kỳ.")
-    if not room.available or room.room_type != section.required_room_type or room.capacity < section.scheduling_student_count:
-        raise HTTPException(status_code=422, detail="Phòng không phù hợp với loại lớp hoặc sĩ số.")
-    if not slot.active or section.course_type not in slot.supports_course_types or slot.duration != section.periods_per_session:
-        raise HTTPException(status_code=422, detail="Khung giờ không phù hợp với loại lớp hoặc số tiết.")
-    if (room.room_code, slot.slot_code) in {(item.room_code, item.slot_code) for item in data.room_unavailable_slots}:
-        raise HTTPException(status_code=422, detail="Phòng không sử dụng được tại khung giờ đã chọn.")
-    for item in occurrences:
-        if item is target or item.get("date") != request.new_date.isoformat():
-            continue
-        other_slot = data.time_slots[str(item["slot_code"])]
-        other_section = data.course_sections[str(item["section_code"])]
-        if _periods_overlap(slot, other_slot) and (item["room_code"] == room.room_code or other_section.lecturer_code == section.lecturer_code):
-            raise HTTPException(status_code=422, detail="Thay đổi tạo xung đột phòng hoặc giảng viên với một buổi học khác.")
-    if any(item is not target and item.get("section_code") == request.section_code and item.get("date") == request.new_date.isoformat() for item in occurrences):
-        raise HTTPException(status_code=422, detail="Lớp học phần đã có một buổi khác vào ngày mới.")
-
-    previous = {key: target.get(key) for key in ("date", "room_code", "slot_code", "academic_week", "status")}
-    target.update({"date": request.new_date.isoformat(), "room_code": room.room_code, "slot_code": slot.slot_code, "academic_week": calendar_date.academic_week, "status": "EXCEPTION"})
-    current = {key: target.get(key) for key in previous}
-    history = list(run.get("change_history", []))
-    history.append({"section_code": request.section_code, "occurrence_date": request.occurrence_date.isoformat(), "previous": previous, "current": current, "reason": request.reason.strip(), "changed_at": datetime.now(timezone.utc).isoformat(), "scope": "ONE_OCCURRENCE"})
-    run["occurrences"], run["change_history"] = occurrences, history
-    write_run(run_code, run)
-    persist_change_log(run_code, request.section_code, previous, current, scope="ONE_OCCURRENCE", reason=request.reason.strip())
-    return {"message": "Đã cập nhật một buổi học và không phát hiện xung đột.", "run": run}
+    raise HTTPException(
+        status_code=409,
+        detail="Phương án GA là bất biến. Hãy công bố phương án thành lịch chính thức trước khi điều chỉnh.",
+    )
 
 
 @router.put("/runs/{run_code}/assignments")
 def adjust_assignment(run_code: str, request: AdjustmentRequest) -> dict[str, object]:
-    run = read_run(run_code)
-    batch_code = str(run.get("batch_code", ""))
-    data_result = validate_sample_dataset(batch_directory(batch_code))
-    if not data_result.is_valid or data_result.data is None:
-        raise HTTPException(status_code=422, detail="Không thể kiểm tra bộ dữ liệu của lần chạy.")
-    data = data_result.data
-    if request.room_code not in data.rooms or request.slot_code not in data.time_slots or request.section_code not in data.course_sections:
-        raise HTTPException(status_code=422, detail="Phòng, khung giờ hoặc lớp học phần không tồn tại.")
-    section = data.course_sections[request.section_code]
-    room = data.rooms[request.room_code]
-    slot = data.time_slots[request.slot_code]
-    if room.room_type != section.required_room_type or room.capacity < section.scheduling_student_count:
-        raise HTTPException(status_code=422, detail="Phòng không phù hợp với loại lớp hoặc sĩ số.")
-    assignments = list(run.get("assignments", []))
-    target = next((item for item in assignments if item["section_code"] == request.section_code), None)
-    if target is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy lớp học phần trong kết quả.")
-    for item in assignments:
-        if item is target:
+    raise HTTPException(
+        status_code=409,
+        detail="Phương án GA là bất biến. Hãy công bố phương án thành lịch chính thức trước khi điều chỉnh.",
+    )
+
+
+class PublishRunRequest(BaseModel):
+    note: str = Field(default="", max_length=1000)
+
+
+class OfficialAdjustmentRequest(BaseModel):
+    section_code: str
+    scope: Literal["ONE_OCCURRENCE", "DATE_RANGE", "FROM_DATE_TO_END"]
+    occurrence_date: date | None = None
+    effective_start_date: date | None = None
+    effective_end_date: date | None = None
+    room_code: str
+    slot_code: str
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class ScheduleSegmentRequest(BaseModel):
+    section_code: str
+    effective_start_date: date
+    effective_end_date: date
+    room_code: str
+    slot_code: str
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class MakeupSessionRequest(BaseModel):
+    section_code: str
+    makeup_date: date
+    room_code: str
+    slot_code: str
+    original_missing_date: date | None = None
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+@router.post("/runs/{run_code}/publish")
+def publish_ga_run(run_code: str, request: PublishRunRequest) -> dict[str, object]:
+    return publish_run_as_official(run_code, request.note)
+
+
+@router.get("/official-timetables")
+def get_official_timetables() -> dict[str, object]:
+    return {"official_timetables": list_official_timetables()}
+
+
+@router.get("/official-timetables/{official_code}")
+def get_official_timetable(official_code: str) -> dict[str, object]:
+    return read_official_timetable(official_code)
+
+
+@router.put("/official-timetables/{official_code}/adjustments")
+def adjust_official_timetable(official_code: str, request: OfficialAdjustmentRequest) -> dict[str, object]:
+    official = read_official_timetable(official_code)
+    data = _official_input_data(official)
+    affected = _select_affected_occurrences(official, request)
+    _validate_adjustment_input(data, official, request.section_code, request.room_code, request.slot_code, affected)
+    room, slot = data.rooms[request.room_code], data.time_slots[request.slot_code]
+    previous = [{key: item.get(key) for key in ("date", "room_code", "slot_code", "academic_week", "status")} for item in affected]
+    for item in affected:
+        item.update({"room_code": room.room_code, "slot_code": slot.slot_code, "status": "EXCEPTION" if request.scope == "ONE_OCCURRENCE" else "ADJUSTED"})
+    _validate_effective_occurrence_conflicts(data, official)
+    current = [{key: item.get(key) for key in ("date", "room_code", "slot_code", "academic_week", "status")} for item in affected]
+    history = list(official.get("change_history", []))
+    history.append({"section_code": request.section_code, "scope": request.scope, "previous": previous, "current": current, "reason": request.reason.strip(), "changed_at": datetime.now(timezone.utc).isoformat()})
+    official["change_history"] = history
+    write_official_timetable(official_code, official)
+    persist_change_log(None, request.section_code, {"occurrences": previous}, {"occurrences": current}, scope=request.scope, reason=request.reason.strip(), official_code=official_code)
+    return {"message": "Đã điều chỉnh lịch chính thức sau khi kiểm tra ràng buộc.", "official": official}
+
+
+@router.post("/official-timetables/{official_code}/segments")
+def create_schedule_segment(official_code: str, request: ScheduleSegmentRequest) -> dict[str, object]:
+    if request.effective_end_date < request.effective_start_date:
+        raise HTTPException(status_code=422, detail="Ngày kết thúc phân đoạn phải sau hoặc bằng ngày bắt đầu.")
+    official = read_official_timetable(official_code)
+    data = _official_input_data(official)
+    existing_segments = list(official.get("segments", []))
+    for item in existing_segments:
+        if item.get("section_code") != request.section_code:
             continue
-        other_slot = data.time_slots[str(item["slot_code"])]
-        overlaps = slot.day_of_week == other_slot.day_of_week and slot.start_period <= other_slot.end_period and other_slot.start_period <= slot.end_period
-        if overlaps and (item["room_code"] == request.room_code or item["lecturer_code"] == section.lecturer_code):
-            raise HTTPException(status_code=422, detail="Thay đổi tạo xung đột phòng hoặc giảng viên với một lớp khác.")
-    previous = {key: target[key] for key in ("room_code", "slot_code", "day_of_week", "start_period", "end_period")}
-    target.update({"room_code": request.room_code, "slot_code": request.slot_code, "day_of_week": slot.day_of_week, "start_period": slot.start_period, "end_period": slot.end_period})
-    history = list(run.get("change_history", []))
-    history.append({"section_code": request.section_code, "previous": previous, "current": {key: target[key] for key in previous}, "changed_at": datetime.now(timezone.utc).isoformat(), "scope": "BASE_WEEKLY_SCHEDULE"})
-    run["change_history"] = history
-    write_run(run_code, run)
-    persist_change_log(run_code, request.section_code, previous, {key: target[key] for key in previous})
-    return {"message": "Đã cập nhật lịch và không phát hiện xung đột.", "run": run}
+        start, end = date.fromisoformat(str(item["effective_start_date"])), date.fromisoformat(str(item["effective_end_date"]))
+        if request.effective_start_date <= end and start <= request.effective_end_date:
+            raise HTTPException(status_code=422, detail="Phân đoạn mới chồng lấn với một phân đoạn hiện có của lớp học phần.")
+    affected = [item for item in official.get("occurrences", []) if item.get("section_code") == request.section_code and request.effective_start_date <= date.fromisoformat(str(item["date"])) <= request.effective_end_date]
+    if not affected:
+        raise HTTPException(status_code=422, detail="Không có buổi học thường kỳ trong khoảng ngày đã chọn để tạo phân đoạn.")
+    _validate_adjustment_input(data, official, request.section_code, request.room_code, request.slot_code, affected)
+    segment = request.model_dump(mode="json")
+    existing_segments.append(segment)
+    official["segments"] = existing_segments
+    for item in affected:
+        item.update({"room_code": request.room_code, "slot_code": request.slot_code, "status": "SEGMENT"})
+    _validate_effective_occurrence_conflicts(data, official)
+    write_official_timetable(official_code, official)
+    sync_official_segments_and_makeups(official_code, official)
+    persist_change_log(None, request.section_code, {}, segment, scope="DATE_RANGE_SEGMENT", reason=request.reason.strip(), official_code=official_code)
+    return {"message": "Đã tạo phân đoạn lịch và cập nhật các buổi nằm trong khoảng hiệu lực.", "official": official}
+
+
+@router.post("/official-timetables/{official_code}/makeups")
+def create_makeup_session(official_code: str, request: MakeupSessionRequest) -> dict[str, object]:
+    official = read_official_timetable(official_code)
+    data = _official_input_data(official)
+    section = data.course_sections.get(request.section_code)
+    calendar_date = data.academic_calendar_dates.get(request.makeup_date)
+    if section is None or calendar_date is None or not calendar_date.is_teaching_day or calendar_date.is_holiday:
+        raise HTTPException(status_code=422, detail="Buổi bù phải thuộc lớp học phần và ngày học hợp lệ trong học kỳ.")
+    if not section.start_date <= request.makeup_date <= section.end_date:
+        raise HTTPException(status_code=422, detail="Ngày học bù phải nằm trong khoảng ngày hiệu lực của lớp học phần.")
+    placeholder = {"section_code": request.section_code, "date": request.makeup_date.isoformat(), "room_code": request.room_code, "slot_code": request.slot_code, "academic_week": calendar_date.academic_week, "status": "MAKEUP"}
+    _validate_adjustment_input(data, official, request.section_code, request.room_code, request.slot_code, [placeholder])
+    official.setdefault("occurrences", []).append(placeholder)
+    official.setdefault("makeup_sessions", []).append({**placeholder, "original_missing_date": request.original_missing_date.isoformat() if request.original_missing_date else None, "reason": request.reason.strip()})
+    _validate_effective_occurrence_conflicts(data, official)
+    write_official_timetable(official_code, official)
+    sync_official_segments_and_makeups(official_code, official)
+    persist_change_log(None, request.section_code, {}, placeholder, scope="MAKEUP", reason=request.reason.strip(), official_code=official_code)
+    return {"message": "Đã thêm buổi học bù sau khi kiểm tra ràng buộc.", "official": official}
+
+
+def _official_input_data(official: dict[str, object]):
+    batch_code = str(official.get("batch_code") or "")
+    result = validate_sample_dataset(batch_directory(batch_code))
+    if not result.is_valid or result.data is None:
+        raise HTTPException(status_code=422, detail="Không thể đọc dữ liệu đầu vào của lịch chính thức.")
+    return result.data
+
+
+def _select_affected_occurrences(official: dict[str, object], request: OfficialAdjustmentRequest) -> list[dict[str, object]]:
+    occurrences = [item for item in official.get("occurrences", []) if item.get("section_code") == request.section_code and item.get("status") != "MAKEUP"]
+    if request.scope == "ONE_OCCURRENCE":
+        if request.occurrence_date is None:
+            raise HTTPException(status_code=422, detail="Phải chọn ngày của buổi học cần điều chỉnh.")
+        affected = [item for item in occurrences if item.get("date") == request.occurrence_date.isoformat()]
+    elif request.scope == "DATE_RANGE":
+        if request.effective_start_date is None or request.effective_end_date is None or request.effective_end_date < request.effective_start_date:
+            raise HTTPException(status_code=422, detail="Khoảng ngày điều chỉnh không hợp lệ.")
+        affected = [item for item in occurrences if request.effective_start_date <= date.fromisoformat(str(item["date"])) <= request.effective_end_date]
+    else:
+        if request.effective_start_date is None:
+            raise HTTPException(status_code=422, detail="Phải chọn ngày bắt đầu điều chỉnh.")
+        affected = [item for item in occurrences if date.fromisoformat(str(item["date"])) >= request.effective_start_date]
+    if not affected:
+        raise HTTPException(status_code=404, detail="Không tìm thấy buổi học thường kỳ phù hợp với phạm vi đã chọn.")
+    return affected
+
+
+def _validate_adjustment_input(data, official: dict[str, object], section_code: str, room_code: str, slot_code: str, affected: list[dict[str, object]]) -> None:
+    section, room, slot = data.course_sections.get(section_code), data.rooms.get(room_code), data.time_slots.get(slot_code)
+    if section is None or room is None or slot is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lớp học phần, phòng hoặc khung giờ.")
+    if not room.available or room.room_type != section.required_room_type or room.capacity < section.scheduling_student_count:
+        raise HTTPException(status_code=422, detail="Phòng không phù hợp với loại lớp hoặc sĩ số.")
+    if not slot.active or section.course_type not in slot.supports_course_types or slot.duration != section.periods_per_session:
+        raise HTTPException(status_code=422, detail="Khung giờ không phù hợp với loại lớp hoặc số tiết.")
+    if (room_code, slot_code) in {(item.room_code, item.slot_code) for item in data.room_unavailable_slots}:
+        raise HTTPException(status_code=422, detail="Phòng không sử dụng được tại khung giờ đã chọn.")
+    fixed = {(item.lecturer_code, item.slot_code) for item in data.lecturer_time_preferences if item.mandatory}
+    if (section.lecturer_code, slot_code) in fixed:
+        raise HTTPException(status_code=422, detail="Khung giờ vi phạm ràng buộc cố định đã xác nhận của giảng viên.")
+    for occurrence in affected:
+        occurrence_date = date.fromisoformat(str(occurrence["date"]))
+        if not section.start_date <= occurrence_date <= section.end_date:
+            raise HTTPException(status_code=422, detail="Buổi điều chỉnh nằm ngoài khoảng ngày hiệu lực của lớp học phần.")
+        if slot.day_of_week != occurrence_date.isoweekday() + 1:
+            raise HTTPException(status_code=422, detail="Khung giờ được chọn không thuộc đúng thứ của các buổi trong phạm vi điều chỉnh.")
+
+
+def _validate_effective_occurrence_conflicts(data, official: dict[str, object]) -> None:
+    occurrences = list(official.get("occurrences", []))
+    for index, first in enumerate(occurrences):
+        first_slot = data.time_slots[str(first["slot_code"])]
+        first_section = data.course_sections[str(first["section_code"])]
+        for second in occurrences[index + 1 :]:
+            if first.get("date") != second.get("date"):
+                continue
+            second_slot = data.time_slots[str(second["slot_code"])]
+            if not _periods_overlap(first_slot, second_slot):
+                continue
+            second_section = data.course_sections[str(second["section_code"])]
+            if first.get("room_code") == second.get("room_code") or first_section.lecturer_code == second_section.lecturer_code:
+                raise HTTPException(status_code=422, detail="Thay đổi tạo xung đột phòng hoặc giảng viên với một buổi học khác.")
 
 
 @router.get("/runs/{run_code}/export.csv")
@@ -357,6 +492,33 @@ def export_run_xlsx(run_code: str) -> StreamingResponse:
         sheet_rows = "".join(f'<row r="{row_index}">' + "".join(f'<c r="{_excel_column(column_index)}{row_index}" t="inlineStr"><is><t>{escape(value)}</t></is></c>' for column_index, value in enumerate(row, start=1)) + "</row>" for row_index, row in enumerate(rows, start=1))
         archive.writestr("xl/worksheets/sheet1.xml", f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{sheet_rows}</sheetData></worksheet>')
     return StreamingResponse(iter([output.getvalue()]), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{run_code}.xlsx"'})
+
+
+@router.get("/official-timetables/{official_code}/export.csv")
+def export_official_csv(official_code: str) -> StreamingResponse:
+    official = read_official_timetable(official_code)
+    stream = StringIO()
+    fields, rows = _export_rows(official)
+    writer = csv.DictWriter(stream, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(rows)
+    return StreamingResponse(iter(["\ufeff" + stream.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{official_code}.csv"'})
+
+
+@router.get("/official-timetables/{official_code}/export.xlsx")
+def export_official_xlsx(official_code: str) -> StreamingResponse:
+    official = read_official_timetable(official_code)
+    fields, export_rows = _export_rows(official)
+    rows = [fields, *[[str(item.get(field, "")) for field in fields] for item in export_rows]]
+    output = BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')
+        archive.writestr("_rels/.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
+        archive.writestr("xl/workbook.xml", '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Thoi khoa bieu" sheetId="1" r:id="rId1"/></sheets></workbook>')
+        archive.writestr("xl/_rels/workbook.xml.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
+        sheet_rows = "".join(f'<row r="{row_index}">' + "".join(f'<c r="{_excel_column(column_index)}{row_index}" t="inlineStr"><is><t>{escape(value)}</t></is></c>' for column_index, value in enumerate(row, start=1)) + "</row>" for row_index, row in enumerate(rows, start=1))
+        archive.writestr("xl/worksheets/sheet1.xml", f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{sheet_rows}</sheetData></worksheet>')
+    return StreamingResponse(iter([output.getvalue()]), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{official_code}.xlsx"'})
 
 
 def _excel_column(index: int) -> str:

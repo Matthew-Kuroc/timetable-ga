@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.datasets import router as datasets_router
@@ -12,11 +13,16 @@ from backend.app.api.batches import router as batches_router
 from backend.app.api.ga import router as ga_router
 from backend.app.api.imports import router as imports_router
 from backend.app.core.config import get_settings
+from backend.app.db.session import DatabaseConfigurationError
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.app_name)
+
+    @app.exception_handler(DatabaseConfigurationError)
+    async def database_configuration_error(_request: object, error: DatabaseConfigurationError) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(error)})
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],

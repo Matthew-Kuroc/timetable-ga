@@ -192,12 +192,92 @@ class GaRunModel(Base):
     hard_violation_count: Mapped[int | None] = mapped_column(Integer)
     soft_cost: Mapped[float | None]
     soft_breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     started_at: Mapped[datetime | None] = mapped_column(DateTime)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
     import_batch: Mapped[ImportBatchModel | None] = relationship(back_populates="ga_runs")
     schedule_assignments: Mapped[list[ScheduleAssignmentModel]] = relationship(back_populates="ga_run")
+    official_timetables: Mapped[list[OfficialTimetableModel]] = relationship(back_populates="source_ga_run")
+
+
+class DatasetSnapshotModel(Base):
+    __tablename__ = "dataset_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    batch_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    parent_batch_code: Mapped[str | None] = mapped_column(String(50))
+    snapshot_path: Mapped[str] = mapped_column(Text, nullable=False)
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class ScheduleChangeLogModel(Base):
+    __tablename__ = "schedule_change_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_code: Mapped[str | None] = mapped_column(String(50), index=True)
+    official_code: Mapped[str | None] = mapped_column(String(50), index=True)
+    section_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    scope: Mapped[str] = mapped_column(String(40), nullable=False)
+    previous_value: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    current_value: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    changed_by: Mapped[str] = mapped_column(String(80), nullable=False, default="training_office")
+    changed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class OfficialTimetableModel(Base):
+    __tablename__ = "official_timetables"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    official_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    source_ga_run_id: Mapped[int] = mapped_column(ForeignKey("ga_runs.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="PUBLISHED")
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    note: Mapped[str | None] = mapped_column(Text)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    published_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    source_ga_run: Mapped[GaRunModel] = relationship(back_populates="official_timetables")
+    segments: Mapped[list[ScheduleSegmentModel]] = relationship(back_populates="official_timetable", cascade="all, delete-orphan")
+    makeup_sessions: Mapped[list[MakeupSessionModel]] = relationship(back_populates="official_timetable", cascade="all, delete-orphan")
+
+
+class ScheduleSegmentModel(Base):
+    __tablename__ = "schedule_segments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    official_timetable_id: Mapped[int] = mapped_column(ForeignKey("official_timetables.id"), nullable=False, index=True)
+    section_code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    effective_start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    effective_end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    room_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    slot_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    official_timetable: Mapped[OfficialTimetableModel] = relationship(back_populates="segments")
+
+
+class MakeupSessionModel(Base):
+    __tablename__ = "makeup_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    official_timetable_id: Mapped[int] = mapped_column(ForeignKey("official_timetables.id"), nullable=False, index=True)
+    section_code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    original_missing_date: Mapped[date | None] = mapped_column(Date)
+    makeup_date: Mapped[date] = mapped_column(Date, nullable=False)
+    academic_week: Mapped[int] = mapped_column(Integer, nullable=False)
+    room_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    slot_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    official_timetable: Mapped[OfficialTimetableModel] = relationship(back_populates="makeup_sessions")
 
 
 class ScheduleAssignmentModel(Base):

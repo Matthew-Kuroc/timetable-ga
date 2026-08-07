@@ -21,6 +21,9 @@ class DatabaseModelTests(unittest.TestCase):
             "course_sections",
             "ga_runs",
             "schedule_assignments",
+            "official_timetables",
+            "schedule_segments",
+            "makeup_sessions",
         }
 
         self.assertTrue(expected_tables.issubset(Base.metadata.tables.keys()))

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "./api/client";
-import type { Assignment, Batch, Occurrence, Preview, Run } from "./types";
+import type { AdjustmentScope, Assignment, Batch, Occurrence, OfficialTimetable, Preview, Run } from "./types";
 
 type Page = "overview" | "import" | "ga" | "results" | "adjustments";
 const requiredFiles = ["lecturers.csv", "rooms.csv", "time_slots.csv", "course_sections.csv", "lecturer_time_preferences.csv", "room_unavailable_slots.csv", "academic_calendar.csv"];
@@ -24,6 +24,7 @@ export function App() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [activeRun, setActiveRun] = useState<Run | null>(null);
+  const [activeOfficial, setActiveOfficial] = useState<OfficialTimetable | null>(null);
   const [notice, setNotice] = useState<{ text: string; tone: "success" | "error" } | null>(null);
 
   const refresh = async () => {
@@ -46,8 +47,8 @@ export function App() {
       {page === "overview" && <Overview runs={runs} batches={batches} onNavigate={navigate} onSelectRun={selectRun} />}
       {page === "import" && <ImportPage onConfirmed={async (batch) => { await refresh(); setNotice({ text: `Đã xác nhận bộ dữ liệu ${batch.batch_code}.`, tone: "success" }); navigate("ga"); }} />}
       {page === "ga" && <GaPage batches={batches} onRun={async (run) => { setActiveRun(run); await refresh(); navigate("results"); }} />}
-      {page === "results" && <ResultsPage run={activeRun} runs={runs} onSelectRun={selectRun} />}
-      {page === "adjustments" && <AdjustmentsPage run={activeRun} onUpdate={setActiveRun} />}
+      {page === "results" && <ResultsPage run={activeRun} runs={runs} onSelectRun={selectRun} onPublish={async (run) => { try { const official = await api.publishRun(run.run_code); setActiveOfficial(official); setNotice({ text: `Đã công bố ${official.official_code} thành lịch chính thức.`, tone: "success" }); navigate("adjustments"); } catch (error) { setNotice({ text: errorText(error), tone: "error" }); } }} />}
+      {page === "adjustments" && <AdjustmentsPage official={activeOfficial} onUpdate={setActiveOfficial} />}
     </main>
   </div>;
 }
@@ -77,7 +78,7 @@ function GaPage({ batches, onRun }: { batches: Batch[]; onRun: (run: Run) => voi
 
 type ResultSort = "day_time" | "lecturer" | "section" | "room" | "course_type";
 
-function ResultsPage({ run, runs, onSelectRun }: { run: Run | null; runs: Run[]; onSelectRun: (code: string) => void }) {
+function ResultsPage({ run, runs, onSelectRun, onPublish }: { run: Run | null; runs: Run[]; onSelectRun: (code: string) => void; onPublish: (run: Run) => void }) {
   const [search, setSearch] = useState("");
   const [type, setType] = useState("ALL");
   const [sort, setSort] = useState<ResultSort>("day_time");
@@ -106,7 +107,7 @@ function ResultsPage({ run, runs, onSelectRun }: { run: Run | null; runs: Run[];
   return <>
     <section className="panel run-summary">
       <div><p className="eyebrow">Mã lần chạy</p><h2>{run.run_code}</h2><p>{run.assignments.length} lớp học phần · {run.occurrences.length} buổi học theo ngày</p></div>
-      <div className="export-links"><a href={`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.csv`}>Xuất CSV</a><a href={`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.xlsx`}>Xuất Excel</a></div>
+      <div className="export-links"><button type="button" onClick={() => onPublish(run)}>Công bố lịch chính thức</button><a href={`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.csv`}>Xuất CSV</a><a href={`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.xlsx`}>Xuất Excel</a></div>
     </section>
     <section className="panel">
       <div className="toolbar result-toolbar">
@@ -139,7 +140,7 @@ function AssignmentTable({ rows }: { rows: Assignment[] }) {
   return <div className="table-wrap"><table><thead><tr><th>Lớp học phần</th><th>Giảng viên</th><th>Ngày / tiết</th><th>Phòng</th><th>Loại lớp</th></tr></thead><tbody>{rows.map((item) => <tr key={item.section_code}><td><strong>{item.section_code}</strong><small>{item.course_name}</small></td><td>{item.lecturer_name || item.lecturer_code}</td><td>{days[item.day_of_week] || item.day_of_week}<small>Tiết {item.start_period}–{item.end_period}</small></td><td>{item.room_code}</td><td><span className="pill">{courseTypes[item.course_type] || "Không xác định"}</span></td></tr>)}</tbody></table></div>;
 }
 
-function AdjustmentsPage({ run, onUpdate }: { run: Run | null; onUpdate: (run: Run) => void }) {
+function AdjustmentsPage({ official, onUpdate }: { official: OfficialTimetable | null; onUpdate: (official: OfficialTimetable) => void }) {
   const [search, setSearch] = useState("");
   const [week, setWeek] = useState("ALL");
   const [lecturer, setLecturer] = useState("ALL");
@@ -149,7 +150,8 @@ function AdjustmentsPage({ run, onUpdate }: { run: Run | null; onUpdate: (run: R
   const [editing, setEditing] = useState<Occurrence | null>(null);
   const [options, setOptions] = useState<Awaited<ReturnType<typeof api.adjustmentOptions>>>([]);
   const [message, setMessage] = useState<string | null>(null);
-  const runCode = run?.run_code;
+  const run = official;
+  const runCode = official?.official_code;
 
   useEffect(() => {
     setSearch("");
@@ -193,11 +195,12 @@ function AdjustmentsPage({ run, onUpdate }: { run: Run | null; onUpdate: (run: R
   useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
 
   const clearFilters = () => { setSearch(""); setWeek("ALL"); setLecturer("ALL"); setRoom("ALL"); setPage(1); };
-  const open = async (item: Occurrence) => { if (!run) return; setMessage(null); try { setOptions(await api.adjustmentOptions(run.run_code, item.section_code, item.date)); setEditing(item); } catch (error) { setMessage(errorText(error)); } };
+  const open = async (item: Occurrence) => { if (!official) return; setMessage(null); try { setOptions(await api.adjustmentOptions(official.source_run_code, item.section_code, item.date)); setEditing(item); } catch (error) { setMessage(errorText(error)); } };
 
-  if (!run) return <section className="panel"><Empty text="Hãy chọn một kết quả thời khóa biểu trước khi điều chỉnh." /></section>;
+  if (!official) return <section className="panel"><Empty text="Hãy công bố một phương án GA thành lịch chính thức trước khi điều chỉnh." /></section>;
   return <section className="panel">
-    <div className="panel-heading"><div><h2>Điều chỉnh một buổi học</h2><p>Tìm buổi học cần xử lý, sau đó thay đổi ngày, khung giờ hoặc phòng. Thay đổi chỉ áp dụng cho buổi được chọn.</p></div><div className="export-links"><a href={`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.csv`}>Xuất CSV</a><a href={`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.xlsx`}>Xuất Excel</a></div></div>
+    <div className="panel-heading"><div><h2>Điều chỉnh lịch chính thức</h2><p>{official.official_code} · Phương án gốc {official.source_run_code} được giữ nguyên. Chọn phạm vi trước khi lưu thay đổi.</p></div><div className="export-links"><a href={`/api/ga/official-timetables/${encodeURIComponent(official.official_code)}/export.csv`}>Xuất CSV</a><a href={`/api/ga/official-timetables/${encodeURIComponent(official.official_code)}/export.xlsx`}>Xuất Excel</a></div></div>
+    <OfficialScheduleTools official={official} onUpdate={onUpdate} onMessage={setMessage} />
     <div className="adjustment-filter-bar" aria-label="Tìm và lọc buổi học">
       <label className="adjustment-search">Tìm buổi học<input aria-label="Tìm buổi học" placeholder="Mã lớp, tên môn, giảng viên hoặc phòng" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
       <label>Tuần học<select aria-label="Lọc theo tuần học" value={week} onChange={(event) => { setWeek(event.target.value); setPage(1); }}><option value="ALL">Tất cả các tuần</option>{weeks.map((value) => <option value={String(value)} key={value}>Tuần {value}</option>)}</select></label>
@@ -206,19 +209,37 @@ function AdjustmentsPage({ run, onUpdate }: { run: Run | null; onUpdate: (run: R
       <button className="secondary" type="button" onClick={clearFilters}>Xóa bộ lọc</button>
     </div>
     {message && <div className="alert success">{message}</div>}
-    <div className="adjustment-list-summary"><span>Hiển thị {firstRow}-{lastRow} trên {filteredRows.length}/{run.occurrences.length} buổi học.</span><label>Hiển thị<select aria-label="Số buổi hiển thị mỗi trang" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value={25}>25 buổi</option><option value={50}>50 buổi</option><option value={100}>100 buổi</option></select></label></div>
+    <div className="adjustment-list-summary"><span>Hiển thị {firstRow}-{lastRow} trên {filteredRows.length}/{official.occurrences.length} buổi học.</span><label>Hiển thị<select aria-label="Số buổi hiển thị mỗi trang" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value={25}>25 buổi</option><option value={50}>50 buổi</option><option value={100}>100 buổi</option></select></label></div>
     <div className="table-wrap result-table"><table><thead><tr><th>Ngày</th><th>Lớp học phần</th><th>Môn học</th><th>Giảng viên</th><th>Tiết</th><th>Phòng</th><th>Thao tác</th></tr></thead><tbody>{currentRows.map((item) => { const assignment = assignments.get(item.section_code); const period = assignment && item.slot_code === assignment.slot_code ? `${assignment.start_period}–${assignment.end_period}` : item.slot_code; return <tr key={`${item.section_code}-${item.date}`}><td>{formatDate(item.date)}<small>Tuần {item.academic_week}</small></td><td><strong>{item.section_code}</strong></td><td>{assignment?.course_name || "—"}</td><td>{assignment?.lecturer_name || assignment?.lecturer_code || "—"}</td><td>{period}</td><td>{item.room_code}</td><td><button className="secondary" type="button" onClick={() => void open(item)}>Sửa buổi này</button></td></tr>; })}</tbody></table></div>
     {!currentRows.length && <Empty text="Không có buổi học phù hợp với bộ lọc." />}
     {pageCount > 1 && <div className="pagination-controls" aria-label="Phân trang buổi học"><button className="secondary" type="button" disabled={currentPageNumber === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Trang trước</button><span>Trang {currentPageNumber}/{pageCount}</span><button className="secondary" type="button" disabled={currentPageNumber === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Trang sau</button></div>}
-    {editing && <AdjustmentDialog run={run} occurrence={editing} options={options} onClose={() => setEditing(null)} onSaved={(next, note) => { onUpdate(next); setEditing(null); setMessage(note); }} />}
+    {editing && <AdjustmentDialog official={official} occurrence={editing} options={options} onClose={() => setEditing(null)} onSaved={(next, note) => { onUpdate(next); setEditing(null); setMessage(note); }} />}
   </section>;
 }
 
-function AdjustmentDialog({ run, occurrence, options, onClose, onSaved }: { run: Run; occurrence: Occurrence; options: Awaited<ReturnType<typeof api.adjustmentOptions>>; onClose: () => void; onSaved: (run: Run, note: string) => void }) {
-  const [slotCode, setSlotCode] = useState(occurrence.slot_code); const [roomCode, setRoomCode] = useState(occurrence.room_code); const [date, setDate] = useState(occurrence.date); const [reason, setReason] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
+function AdjustmentDialog({ official, occurrence, options, onClose, onSaved }: { official: OfficialTimetable; occurrence: Occurrence; options: Awaited<ReturnType<typeof api.adjustmentOptions>>; onClose: () => void; onSaved: (official: OfficialTimetable, note: string) => void }) {
+  const [slotCode, setSlotCode] = useState(occurrence.slot_code); const [roomCode, setRoomCode] = useState(occurrence.room_code); const [scope, setScope] = useState<AdjustmentScope>("ONE_OCCURRENCE"); const [endDate, setEndDate] = useState(occurrence.date); const [reason, setReason] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
   const selected = options.find((slot) => slot.slot_code === slotCode) || options[0]; const rooms = selected?.rooms || [];
   useEffect(() => { if (selected && !rooms.some((room) => room.room_code === roomCode)) setRoomCode(rooms[0]?.room_code || ""); }, [selected, rooms, roomCode]);
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (!reason.trim()) { setError("Vui lòng nhập lý do điều chỉnh."); return; } setBusy(true); try { const result = await api.adjustOccurrence(run.run_code, { section_code: occurrence.section_code, occurrence_date: occurrence.date, new_date: date, slot_code: selected?.slot_code || "", room_code: roomCode, reason }); onSaved(result.run, result.message); } catch (cause) { setError(errorText(cause)); } finally { setBusy(false); } };
-  return <div className="modal-backdrop" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button className="close" onClick={onClose} aria-label="Đóng">×</button><p className="eyebrow">Điều chỉnh một buổi học</p><h2 id="modal-title">{occurrence.section_code} · {formatDate(occurrence.date)}</h2><form onSubmit={submit}><label>Ngày học mới<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></label><label>Khung giờ<select value={selected?.slot_code || ""} onChange={(event) => setSlotCode(event.target.value)}>{options.map((slot) => <option key={slot.slot_code} value={slot.slot_code}>Tiết {slot.start_period}–{slot.end_period}</option>)}</select></label><label>Phòng học<select value={roomCode} onChange={(event) => setRoomCode(event.target.value)}>{rooms.map((room) => <option key={room.room_code} value={room.room_code}>{room.room_code} — {room.room_name} ({room.capacity} chỗ)</option>)}</select></label><label>Lý do điều chỉnh<textarea value={reason} onChange={(event) => setReason(event.target.value)} required /></label>{error && <div className="alert error">{error}</div>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Hủy</button><button disabled={busy || !selected || !roomCode}>{busy ? "Đang lưu..." : "Lưu điều chỉnh"}</button></div></form></section></div>;
+  const submit = async (event: FormEvent) => { event.preventDefault(); if (!reason.trim()) { setError("Vui lòng nhập lý do điều chỉnh."); return; } setBusy(true); try { const body = { section_code: occurrence.section_code, occurrence_date: occurrence.date, slot_code: selected?.slot_code || "", room_code: roomCode, reason, scope, ...(scope === "DATE_RANGE" ? { effective_start_date: occurrence.date, effective_end_date: endDate } : scope === "FROM_DATE_TO_END" ? { effective_start_date: occurrence.date } : {}) }; const result = await api.adjustOfficial(official.official_code, body); onSaved(result.official, result.message); } catch (cause) { setError(errorText(cause)); } finally { setBusy(false); } };
+  return <div className="modal-backdrop" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button className="close" onClick={onClose} aria-label="Đóng">×</button><p className="eyebrow">Điều chỉnh lịch chính thức</p><h2 id="modal-title">{occurrence.section_code} · {formatDate(occurrence.date)}</h2><form onSubmit={submit}><label>Phạm vi áp dụng<select value={scope} onChange={(event) => setScope(event.target.value as AdjustmentScope)}><option value="ONE_OCCURRENCE">Chỉ buổi học này</option><option value="DATE_RANGE">Từ buổi này đến ngày đã chọn</option><option value="FROM_DATE_TO_END">Từ buổi này đến hết học phần</option></select></label>{scope === "DATE_RANGE" && <label>Ngày kết thúc<input type="date" min={occurrence.date} value={endDate} onChange={(event) => setEndDate(event.target.value)} required /></label>}<label>Khung giờ<select value={selected?.slot_code || ""} onChange={(event) => setSlotCode(event.target.value)}>{options.map((slot) => <option key={slot.slot_code} value={slot.slot_code}>Tiết {slot.start_period}–{slot.end_period}</option>)}</select></label><label>Phòng học<select value={roomCode} onChange={(event) => setRoomCode(event.target.value)}>{rooms.map((room) => <option key={room.room_code} value={room.room_code}>{room.room_code} — {room.room_name} ({room.capacity} chỗ)</option>)}</select></label><label>Lý do điều chỉnh<textarea value={reason} onChange={(event) => setReason(event.target.value)} required /></label>{error && <div className="alert error">{error}</div>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Hủy</button><button disabled={busy || !selected || !roomCode}>{busy ? "Đang lưu..." : "Lưu điều chỉnh"}</button></div></form></section></div>;
+}
+
+function OfficialScheduleTools({ official, onUpdate, onMessage }: { official: OfficialTimetable; onUpdate: (official: OfficialTimetable) => void; onMessage: (message: string) => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const [missingKey, setMissingKey] = useState("");
+  const completedMissingDates = new Set((official.makeup_sessions || []).map((item) => `${item.section_code}|${item.original_missing_date || ""}`));
+  const missingSessions = (official.skipped_holiday_sessions || []).filter((item) => !completedMissingDates.has(`${item.section_code}|${item.date}`));
+  const submit = async (event: FormEvent<HTMLFormElement>, kind: "segment" | "makeup") => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>;
+    if (kind === "makeup" && values.missing_session) {
+      const [sectionCode, originalDate] = values.missing_session.split("|");
+      values.section_code = sectionCode; values.original_missing_date = originalDate; delete values.missing_session;
+    }
+    setError(null);
+    try { const result = kind === "segment" ? await api.createSegment(official.official_code, values) : await api.createMakeup(official.official_code, values); onUpdate(result.official); onMessage(result.message); event.currentTarget.reset(); setMissingKey(""); } catch (cause) { setError(errorText(cause)); }
+  };
+  return <section className="schedule-tools"><div className="tool-intro"><h3>Quản lý ngoại lệ lịch</h3><p><strong>Phân đoạn lịch</strong> dùng khi một lớp đổi phòng hoặc khung giờ lặp lại trong một khoảng ngày; không tạo thêm buổi học. <strong>Buổi học bù</strong> là một buổi riêng để bù cho ngày nghỉ.</p></div>{missingSessions.length ? <div className="missing-sessions"><strong>Có {missingSessions.length} buổi cần bù do ngày nghỉ.</strong><span> Chọn chi tiết buổi thiếu trong biểu mẫu “Thêm buổi học bù”.</span></div> : <div className="missing-sessions complete"><strong>Không có buổi thiếu do ngày nghỉ trong lịch này.</strong></div>}<div className="tool-forms"><form className="tool-card" onSubmit={(event) => void submit(event, "segment")}><h3>Tạo phân đoạn lịch</h3><p>Ví dụ: chuyển phòng từ ngày 16/10 đến hết học kỳ.</p><label>Mã lớp học phần<input name="section_code" required /></label><div className="compact-grid"><label>Từ ngày<input name="effective_start_date" type="date" required /></label><label>Đến ngày<input name="effective_end_date" type="date" required /></label></div><div className="compact-grid"><label>Mã khung giờ<input name="slot_code" required /></label><label>Mã phòng<input name="room_code" required /></label></div><label>Lý do<textarea name="reason" required /></label><button>Tạo phân đoạn</button></form><form className="tool-card" onSubmit={(event) => void submit(event, "makeup")}><h3>Thêm buổi học bù</h3><p>Chọn một buổi thiếu để liên kết và theo dõi số buổi cần dạy.</p><label>Buổi thiếu do ngày nghỉ<select name="missing_session" value={missingKey} onChange={(event) => setMissingKey(event.target.value)} required><option value="">Chọn buổi cần bù</option>{missingSessions.map((item) => <option value={`${item.section_code}|${item.date}`} key={`${item.section_code}-${item.date}`}>{item.section_code} · {formatDate(item.date)}{item.holiday_name ? ` — ${item.holiday_name}` : ""}</option>)}</select></label><div className="compact-grid"><label>Ngày học bù<input name="makeup_date" type="date" required /></label><label>Mã khung giờ<input name="slot_code" required /></label></div><label>Mã phòng<input name="room_code" required /></label><label>Lý do<textarea name="reason" required /></label><button disabled={!missingSessions.length}>Thêm buổi bù</button></form></div>{error && <div className="alert error">{error}</div>}</section>;
 }
 function Empty({ text }: { text: string }) { return <p className="empty">{text}</p>; }
