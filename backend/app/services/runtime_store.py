@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import copy
 import json
 import shutil
 from datetime import datetime, timezone
@@ -8,7 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 from backend.app.importing.import_preview import REQUIRED_DATASET_FILES
 from backend.app.importing.csv_validator import validate_sample_dataset
@@ -17,12 +18,17 @@ from backend.app.db.models import (
     AcademicCalendarDateModel,
     AcademicTermModel,
     CourseSectionModel,
+    DatasetSnapshotModel,
     GaRunModel,
     ImportBatchModel,
     LecturerModel,
+    MakeupSessionModel,
+    OfficialTimetableModel,
     RoomModel,
     ScheduleAssignmentModel,
+    ScheduleChangeLogModel,
     ScheduleOccurrenceModel,
+    ScheduleSegmentModel,
     TimeSlotModel,
 )
 
@@ -31,6 +37,14 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_ROOT = REPO_ROOT / "data" / "runtime"
 BATCH_ROOT = RUNTIME_ROOT / "batches"
 RUN_ROOT = RUNTIME_ROOT / "runs"
+
+
+def _run_code() -> str:
+    return f"RUN-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid4().hex[:6].upper()}"
+
+
+def _official_code() -> str:
+    return f"OFFICIAL-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid4().hex[:6].upper()}"
 
 
 def create_confirmed_batch(
@@ -133,66 +147,149 @@ def update_batch_file(batch_code: str, file_name: str, rows: list[dict[str, str]
 
 
 def create_run(payload: dict[str, object]) -> str:
-    RUN_ROOT.mkdir(parents=True, exist_ok=True)
-    run_code = f"RUN-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid4().hex[:6].upper()}"
+    run_code = _run_code()
     payload["run_code"] = run_code
     payload["created_at"] = _now()
-    _write_json(RUN_ROOT / f"{run_code}.json", payload)
     return run_code
 
 
 def list_runs(limit: int = 20) -> list[dict[str, object]]:
-    """Return compact, newest-first run records without loading full schedules."""
-    if not RUN_ROOT.exists():
-        return []
-
-    summaries: list[dict[str, object]] = []
-    for path in RUN_ROOT.glob("RUN-*.json"):
-        payload = _read_json(path)
-        evaluation = payload.get("evaluation") if isinstance(payload.get("evaluation"), dict) else {}
-        assignments = payload.get("assignments") if isinstance(payload.get("assignments"), list) else []
-        summaries.append(
-            {
-                "run_code": payload.get("run_code", path.stem),
-                "batch_code": payload.get("batch_code"),
-                "status": payload.get("status"),
-                "created_at": payload.get("created_at"),
-                "generation_count": payload.get("generation_count", 0),
-                "seed": payload.get("seed"),
-                "hard_violation_count": evaluation.get("hard_violation_count", 0),
-                "soft_cost": evaluation.get("soft_cost"),
-                "assignment_count": len(assignments),
-            }
-        )
-    return sorted(summaries, key=lambda item: str(item.get("created_at", "")), reverse=True)[:limit]
+    """Return compact run records from PostgreSQL; JSON is only a snapshot."""
+    with get_session_local()() as session:
+        models = session.scalars(select(GaRunModel).order_by(GaRunModel.created_at.desc()).limit(limit)).all()
+        return [_run_summary(model) for model in models]
 
 
 def read_run(run_code: str) -> dict[str, object]:
-    path = RUN_ROOT / f"{run_code}.json"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Không tìm thấy kết quả chạy GA.")
-    return _read_json(path)
+    with get_session_local()() as session:
+        model = session.scalar(select(GaRunModel).where(GaRunModel.run_code == run_code))
+        if model is None or model.payload is None:
+            raise HTTPException(status_code=404, detail="Không tìm thấy kết quả chạy GA.")
+        return copy.deepcopy(model.payload)
 
 
 def write_run(run_code: str, payload: dict[str, object]) -> None:
-    _write_json(RUN_ROOT / f"{run_code}.json", payload)
+    payload["run_code"] = run_code
+    _upsert_run_payload(payload)
+    _write_run_snapshot(run_code, payload)
+
+
+def publish_run_as_official(run_code: str, note: str = "") -> dict[str, object]:
+    run = read_run(run_code)
+    evaluation = run.get("evaluation") if isinstance(run.get("evaluation"), dict) else {}
+    if int(evaluation.get("hard_violation_count") or 0) != 0:
+        raise HTTPException(status_code=422, detail="Chỉ có thể công bố phương án không vi phạm ràng buộc cứng.")
+    with get_session_local()() as session:
+        source = session.scalar(select(GaRunModel).where(GaRunModel.run_code == run_code))
+        if source is None:
+            raise HTTPException(status_code=404, detail="Không tìm thấy phương án GA để công bố.")
+        for item in session.scalars(select(OfficialTimetableModel).where(OfficialTimetableModel.status == "PUBLISHED")):
+            item.status = "SUPERSEDED"
+        official_code = _official_code()
+        payload = copy.deepcopy(run)
+        payload.update({"official_code": official_code, "source_run_code": run_code, "status": "PUBLISHED", "published_at": _now(), "segments": [], "makeup_sessions": [], "change_history": []})
+        model = OfficialTimetableModel(
+            official_code=official_code,
+            source_ga_run_id=source.id,
+            status="PUBLISHED",
+            version_number=1,
+            note=note.strip() or None,
+            payload=payload,
+            published_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        session.add(model)
+        session.commit()
+        return copy.deepcopy(payload)
+
+
+def list_official_timetables() -> list[dict[str, object]]:
+    with get_session_local()() as session:
+        models = session.scalars(select(OfficialTimetableModel).order_by(OfficialTimetableModel.published_at.desc())).all()
+        return [
+            {
+                "official_code": item.official_code,
+                "source_run_code": item.payload.get("source_run_code"),
+                "status": item.status,
+                "version_number": item.version_number,
+                "published_at": item.published_at.isoformat(),
+                "note": item.note or "",
+            }
+            for item in models
+        ]
+
+
+def read_official_timetable(official_code: str) -> dict[str, object]:
+    with get_session_local()() as session:
+        model = session.scalar(select(OfficialTimetableModel).where(OfficialTimetableModel.official_code == official_code))
+        if model is None:
+            raise HTTPException(status_code=404, detail="Không tìm thấy lịch chính thức.")
+        return copy.deepcopy(model.payload)
+
+
+def write_official_timetable(official_code: str, payload: dict[str, object]) -> None:
+    with get_session_local()() as session:
+        model = session.scalar(select(OfficialTimetableModel).where(OfficialTimetableModel.official_code == official_code))
+        if model is None:
+            raise HTTPException(status_code=404, detail="Không tìm thấy lịch chính thức.")
+        model.payload = copy.deepcopy(payload)
+        model.version_number += 1
+        session.commit()
+
+
+def sync_official_segments_and_makeups(official_code: str, payload: dict[str, object]) -> None:
+    with get_session_local()() as session:
+        model = session.scalar(select(OfficialTimetableModel).where(OfficialTimetableModel.official_code == official_code))
+        if model is None:
+            raise HTTPException(status_code=404, detail="Không tìm thấy lịch chính thức.")
+        session.query(ScheduleSegmentModel).filter(ScheduleSegmentModel.official_timetable_id == model.id).delete()
+        session.query(MakeupSessionModel).filter(MakeupSessionModel.official_timetable_id == model.id).delete()
+        for item in payload.get("segments", []):
+            session.add(ScheduleSegmentModel(
+                official_timetable_id=model.id,
+                section_code=str(item["section_code"]),
+                effective_start_date=__import__("datetime").date.fromisoformat(str(item["effective_start_date"])),
+                effective_end_date=__import__("datetime").date.fromisoformat(str(item["effective_end_date"])),
+                room_code=str(item["room_code"]),
+                slot_code=str(item["slot_code"]),
+                reason=str(item.get("reason") or "") or None,
+            ))
+        for item in payload.get("makeup_sessions", []):
+            session.add(MakeupSessionModel(
+                official_timetable_id=model.id,
+                section_code=str(item["section_code"]),
+                original_missing_date=__import__("datetime").date.fromisoformat(str(item["original_missing_date"])) if item.get("original_missing_date") else None,
+                makeup_date=__import__("datetime").date.fromisoformat(str(item["date"])),
+                academic_week=int(item["academic_week"]),
+                room_code=str(item["room_code"]),
+                slot_code=str(item["slot_code"]),
+                reason=str(item["reason"]),
+            ))
+        session.commit()
 
 
 def persist_change_log(
-    run_code: str,
+    run_code: str | None,
     section_code: str,
     previous: dict[str, object],
     current: dict[str, object],
     *,
     scope: str = "BASE_WEEKLY_SCHEDULE",
     reason: str | None = None,
+    official_code: str | None = None,
 ) -> None:
-    try:
-        with get_session_local()() as session:
-            session.execute(text("""insert into schedule_change_logs (run_code, section_code, scope, previous_value, current_value, reason, changed_by, changed_at) values (:run_code, :section_code, :scope, cast(:previous as json), cast(:current as json), :reason, 'training_office', now())"""), {"run_code": run_code, "section_code": section_code, "scope": scope, "previous": json.dumps(previous), "current": json.dumps(current), "reason": reason})
-            session.commit()
-    except Exception:
-        return
+    with get_session_local()() as session:
+        session.add(ScheduleChangeLogModel(
+            run_code=run_code,
+            official_code=official_code,
+            section_code=section_code,
+            scope=scope,
+            previous_value=previous,
+            current_value=current,
+            reason=reason,
+            changed_by="training_office",
+            changed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        ))
+        session.commit()
 
 
 def persist_ga_run(batch_code: str, payload: dict[str, object], input_data: object) -> None:
@@ -240,22 +337,31 @@ def persist_ga_run(batch_code: str, payload: dict[str, object], input_data: obje
                     session.add(model)
                 model.lecturer_id, model.weekly_sessions, model.initial_registration_limit, model.approved_max_students = lecturers[value.lecturer_code].id, value.weekly_sessions, value.initial_registration_limit, value.approved_max_students
                 session.flush(); sections[value.section_code] = model
-            run = GaRunModel(
-                run_code=str(payload["run_code"]),
-                import_batch_id=batch.id,
-                status=str(payload["status"]),
-                population_size=int(configuration.get("population_size", 0)),
-                generations=int(configuration.get("generations", payload.get("generation_count", 0))),
-                mutation_rate=float(configuration["mutation_rate"]) if configuration.get("mutation_rate") is not None else None,
-                crossover_rate=float(configuration["crossover_rate"]) if configuration.get("crossover_rate") is not None else None,
-                seed=payload.get("seed"),
-                best_fitness=float(payload["evaluation"]["total_cost"]),
-                hard_violation_count=int(payload["evaluation"]["hard_violation_count"]),
-                soft_cost=float(payload["evaluation"]["soft_cost"]),
-                soft_breakdown=payload["evaluation"]["soft_breakdown"],
-                finished_at=datetime.now(timezone.utc).replace(tzinfo=None),
-            )
-            session.add(run); session.flush()
+            run = session.scalar(select(GaRunModel).where(GaRunModel.run_code == str(payload["run_code"])))
+            if run is None:
+                run = GaRunModel(
+                    run_code=str(payload["run_code"]),
+                    import_batch_id=batch.id,
+                    status=str(payload["status"]),
+                    population_size=int(configuration.get("population_size", 0)),
+                    generations=int(configuration.get("generations", payload.get("generation_count", 0))),
+                )
+                session.add(run)
+            run.import_batch_id = batch.id
+            run.status = str(payload["status"])
+            run.population_size = int(configuration.get("population_size", 0))
+            run.generations = int(configuration.get("generations", payload.get("generation_count", 0)))
+            run.mutation_rate = float(configuration["mutation_rate"]) if configuration.get("mutation_rate") is not None else None
+            run.crossover_rate = float(configuration["crossover_rate"]) if configuration.get("crossover_rate") is not None else None
+            run.seed = payload.get("seed")  # type: ignore[assignment]
+            run.best_fitness = float(payload["evaluation"]["total_cost"])
+            run.hard_violation_count = int(payload["evaluation"]["hard_violation_count"])
+            run.soft_cost = float(payload["evaluation"]["soft_cost"])
+            run.soft_breakdown = payload["evaluation"]["soft_breakdown"]  # type: ignore[assignment]
+            run.payload = copy.deepcopy(payload)
+            run.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            session.flush()
+            session.query(ScheduleAssignmentModel).filter(ScheduleAssignmentModel.ga_run_id == run.id).delete()
             assignment_models = {}
             for value in payload.get("assignments", []):
                 model = ScheduleAssignmentModel(ga_run_id=run.id, course_section_id=sections[value["section_code"]].id, lecturer_id=lecturers[value["lecturer_code"]].id, room_id=rooms[value["room_code"]].id, time_slot_id=slots[value["slot_code"]].id, status="SCHEDULED")
@@ -264,8 +370,9 @@ def persist_ga_run(batch_code: str, payload: dict[str, object], input_data: obje
                 assignment = assignment_models[value["section_code"]]
                 session.add(ScheduleOccurrenceModel(schedule_assignment_id=assignment.id, course_section_id=sections[value["section_code"]].id, date=__import__("datetime").date.fromisoformat(value["date"]), academic_week=int(value["academic_week"]), room_id=rooms[value["room_code"]].id, time_slot_id=slots[value["slot_code"]].id, status=value["status"]))
             session.commit()
+            _write_run_snapshot(str(payload["run_code"]), payload)
     except Exception:
-        return
+        raise
 
 
 def errors_payload(validation: object) -> list[dict[str, object]]:
@@ -301,26 +408,74 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _write_run_snapshot(run_code: str, payload: dict[str, object]) -> None:
+    RUN_ROOT.mkdir(parents=True, exist_ok=True)
+    _write_json(RUN_ROOT / f"{run_code}.json", payload)
+
+
+def _upsert_run_payload(payload: dict[str, object]) -> None:
+    evaluation = payload.get("evaluation") if isinstance(payload.get("evaluation"), dict) else {}
+    configuration = payload.get("configuration") if isinstance(payload.get("configuration"), dict) else {}
+    with get_session_local()() as session:
+        model = session.scalar(select(GaRunModel).where(GaRunModel.run_code == str(payload["run_code"])))
+        if model is None:
+            model = GaRunModel(
+                run_code=str(payload["run_code"]),
+                import_batch_id=None,
+                status=str(payload.get("status") or "PENDING"),
+                population_size=int(configuration.get("population_size") or 0),
+                generations=int(configuration.get("generations") or payload.get("generation_count") or 0),
+            )
+            session.add(model)
+        model.status = str(payload.get("status") or model.status)
+        model.seed = payload.get("seed")  # type: ignore[assignment]
+        model.hard_violation_count = int(evaluation.get("hard_violation_count") or 0)
+        model.soft_cost = float(evaluation.get("soft_cost") or 0)
+        model.best_fitness = float(evaluation.get("total_cost") or model.soft_cost or 0)
+        model.soft_breakdown = evaluation.get("soft_breakdown") if isinstance(evaluation.get("soft_breakdown"), dict) else None
+        model.payload = copy.deepcopy(payload)
+        session.commit()
+
+
+def _run_summary(model: GaRunModel) -> dict[str, object]:
+    payload = model.payload or {}
+    assignments = payload.get("assignments") if isinstance(payload.get("assignments"), list) else []
+    return {
+        "run_code": model.run_code,
+        "batch_code": payload.get("batch_code"),
+        "status": model.status,
+        "created_at": payload.get("created_at") or model.created_at.isoformat(),
+        "generation_count": payload.get("generation_count", model.generations),
+        "seed": model.seed,
+        "hard_violation_count": model.hard_violation_count or 0,
+        "soft_cost": model.soft_cost,
+        "assignment_count": len(assignments),
+    }
+
+
 def _persist_snapshot(manifest: dict[str, object], path: Path) -> None:
-    try:
-        with get_session_local()() as session:
-            batch = session.scalar(select(ImportBatchModel).where(ImportBatchModel.batch_code == manifest["batch_code"]))
-            if batch is None:
-                session.add(ImportBatchModel(
-                    batch_code=str(manifest["batch_code"]),
-                    display_name=str(manifest.get("display_name") or manifest["batch_code"]),
-                    semester=str(manifest.get("semester") or "") or None,
-                    academic_year=str(manifest.get("academic_year") or "") or None,
-                    version_number=int(manifest.get("version_number") or 1),
-                    status="CONFIRMED",
-                    note=str(manifest.get("note") or "") or None,
-                    uploaded_at=_parse_timestamp(str(manifest.get("created_at") or _now())),
-                    confirmed_at=_parse_timestamp(str(manifest.get("confirmed_at") or _now())),
-                ))
-            session.execute(text("""insert into dataset_snapshots (batch_code, parent_batch_code, snapshot_path, manifest, created_at) values (:batch_code, :parent_batch_code, :snapshot_path, cast(:manifest as json), now()) on conflict (batch_code) do nothing"""), {"batch_code": manifest["batch_code"], "parent_batch_code": manifest.get("parent_batch_code"), "snapshot_path": str(path), "manifest": json.dumps(manifest)})
-            session.commit()
-    except Exception:
-        return
+    with get_session_local()() as session:
+        batch = session.scalar(select(ImportBatchModel).where(ImportBatchModel.batch_code == manifest["batch_code"]))
+        if batch is None:
+            batch = ImportBatchModel(batch_code=str(manifest["batch_code"]), display_name=str(manifest.get("display_name") or manifest["batch_code"]), status="CONFIRMED")
+            session.add(batch)
+        batch.display_name = str(manifest.get("display_name") or manifest["batch_code"])
+        batch.semester = str(manifest.get("semester") or "") or None
+        batch.academic_year = str(manifest.get("academic_year") or "") or None
+        batch.version_number = int(manifest.get("version_number") or 1)
+        batch.status = "CONFIRMED"
+        batch.note = str(manifest.get("note") or "") or None
+        batch.uploaded_at = _parse_timestamp(str(manifest.get("created_at") or _now()))
+        batch.confirmed_at = _parse_timestamp(str(manifest.get("confirmed_at") or _now()))
+        snapshot = session.scalar(select(DatasetSnapshotModel).where(DatasetSnapshotModel.batch_code == manifest["batch_code"]))
+        if snapshot is None:
+            snapshot = DatasetSnapshotModel(batch_code=str(manifest["batch_code"]), snapshot_path=str(path), manifest=copy.deepcopy(manifest))
+            session.add(snapshot)
+        else:
+            snapshot.parent_batch_code = str(manifest.get("parent_batch_code") or "") or None
+            snapshot.snapshot_path = str(path)
+            snapshot.manifest = copy.deepcopy(manifest)
+        session.commit()
 
 
 def _parse_timestamp(value: str) -> datetime:

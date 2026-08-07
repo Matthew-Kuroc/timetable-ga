@@ -46,6 +46,26 @@ form { margin-top: 18px; } label { display: grid; gap: 6px; color: #334862; font
 .metadata-intro { margin: 16px 0 0; color: #277360; }
 .batch-metadata label span { color: #607087; font-weight: 400; }
 
+.schedule-tools { margin: 28px 0 30px; padding: 22px; border: 1px solid #dceaf0; border-radius: 15px; background: #f8fbfd; }
+.tool-intro { max-width: 920px; margin-bottom: 18px; }
+.tool-intro h3 { margin-bottom: 6px; }
+.tool-intro p { margin: 0; }
+.missing-sessions { margin: 18px 0 22px; padding: 14px 16px; border: 1px solid #efdba8; border-radius: 11px; background: #fff9e9; color: #685116; }
+.missing-sessions ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 7px 18px; margin: 10px 0 0; padding-left: 18px; }
+.missing-sessions.complete { border-color: #c7e6d8; background: #effaf4; color: #226447; }
+.tool-forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+.tool-card { display: grid; gap: 13px; margin: 0; padding: 20px; border: 1px solid #dfe9f0; border-radius: 13px; background: #fff; box-shadow: 0 5px 16px rgba(29, 58, 90, .04); }
+.tool-card h3 { margin: 0; }
+.tool-card p { min-height: 44px; margin: -4px 0 4px; font-size: .9rem; }
+.tool-card textarea { min-height: 92px; }
+.tool-card button { justify-self: start; margin-top: 4px; }
+.compact-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+
+@media (max-width: 900px) {
+  .tool-forms, .compact-grid { grid-template-columns: 1fr; }
+  .tool-card p { min-height: 0; }
+}
+
 @media (min-width: 781px) {
   .app-shell { align-items: start; }
   .sidebar { position: sticky; top: 0; height: 100vh; min-height: 0; }

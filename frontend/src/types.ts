@@ -22,6 +22,11 @@ export interface Occurrence {
   slot_code: string;
   academic_week: number;
   status: string;
+  original_missing_date?: string;
+}
+
+export interface SkippedHolidaySession extends Occurrence {
+  holiday_name?: string;
 }
 
 export interface Run {
@@ -34,7 +39,29 @@ export interface Run {
   assignments: Assignment[];
   occurrences: Occurrence[];
   change_history?: ChangeHistory[];
+  skipped_holiday_sessions?: SkippedHolidaySession[];
 }
+
+/** A published timetable is a separate, editable copy of an immutable GA run. */
+export interface OfficialTimetable extends Run {
+  official_code: string;
+  source_run_code: string;
+  published_at?: string;
+  version_number?: number;
+  segments?: ScheduleSegment[];
+  makeup_sessions?: Occurrence[];
+}
+
+export interface ScheduleSegment {
+  section_code: string;
+  effective_start_date: string;
+  effective_end_date: string;
+  room_code: string;
+  slot_code: string;
+  reason?: string;
+}
+
+export type AdjustmentScope = "ONE_OCCURRENCE" | "DATE_RANGE" | "FROM_DATE_TO_END";
 
 export interface ChangeHistory {
   section_code: string;

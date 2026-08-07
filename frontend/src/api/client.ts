@@ -1,4 +1,4 @@
-import type { AdjustmentSlot, Batch, Preview, Run } from "../types";
+import type { AdjustmentSlot, AdjustmentScope, Batch, OfficialTimetable, Preview, Run } from "../types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -16,6 +16,9 @@ export const api = {
   batches: async () => (await request<{ batches: Batch[] }>("/api/batches")).batches,
   runs: async () => (await request<{ runs: Run[] }>("/api/ga/runs")).runs,
   run: (runCode: string) => request<Run>(`/api/ga/runs/${encodeURIComponent(runCode)}`),
+  officialTimetables: async () => (await request<{ official_timetables: OfficialTimetable[] }>("/api/ga/official-timetables")).official_timetables,
+  officialTimetable: (officialCode: string) => request<OfficialTimetable>(`/api/ga/official-timetables/${encodeURIComponent(officialCode)}`),
+  publishRun: (runCode: string, note = "") => request<OfficialTimetable>(`/api/ga/runs/${encodeURIComponent(runCode)}/publish`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) }),
   previewImport: (files: File[]) => {
     const form = new FormData(); files.forEach((file) => form.append("files", file, file.name));
     return request<Preview>("/api/imports/csv/preview", { method: "POST", body: form });
@@ -30,5 +33,7 @@ export const api = {
     const result = await request<{ slots: AdjustmentSlot[] }>(`/api/ga/runs/${encodeURIComponent(runCode)}/occurrence-adjustment-options/${encodeURIComponent(sectionCode)}/${date}?target_date=${date}`);
     return result.slots;
   },
-  adjustOccurrence: (runCode: string, body: Record<string, string>) => request<{ message: string; run: Run }>(`/api/ga/runs/${encodeURIComponent(runCode)}/occurrences`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  adjustOfficial: (officialCode: string, body: { section_code: string; occurrence_date: string; room_code: string; slot_code: string; reason: string; scope: AdjustmentScope; effective_start_date?: string; effective_end_date?: string }) => request<{ message: string; official: OfficialTimetable }>(`/api/ga/official-timetables/${encodeURIComponent(officialCode)}/adjustments`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  createSegment: (officialCode: string, body: Record<string, string>) => request<{ message: string; official: OfficialTimetable }>(`/api/ga/official-timetables/${encodeURIComponent(officialCode)}/segments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  createMakeup: (officialCode: string, body: Record<string, string>) => request<{ message: string; official: OfficialTimetable }>(`/api/ga/official-timetables/${encodeURIComponent(officialCode)}/makeups`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
 };

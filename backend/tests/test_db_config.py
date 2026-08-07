@@ -4,18 +4,19 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.app.core.config import DEFAULT_DATABASE_URL, get_settings
-from backend.app.db.session import create_database_engine
+from backend.app.core.config import get_settings
+from backend.app.db.session import DatabaseConfigurationError, create_database_engine
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class DatabaseConfigTests(unittest.TestCase):
-    def test_default_database_url_uses_postgresql(self) -> None:
-        self.assertTrue(DEFAULT_DATABASE_URL.startswith("postgresql+psycopg://"))
+    def test_database_url_must_be_explicit(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
-            self.assertEqual(get_settings().database_url, DEFAULT_DATABASE_URL)
+            self.assertIsNone(get_settings().database_url)
+            with self.assertRaises(DatabaseConfigurationError):
+                create_database_engine()
 
     def test_engine_factory_can_use_explicit_sqlite_url_for_tests(self) -> None:
         engine = create_database_engine("sqlite:///:memory:")
