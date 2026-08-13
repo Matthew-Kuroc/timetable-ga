@@ -10,10 +10,8 @@ import pytest
 fastapi = pytest.importorskip("fastapi")
 pytest.importorskip("pydantic")
 
-from fastapi.testclient import TestClient
-
-from backend.app.main import create_app
 from backend.app.services import runtime_store
+from backend.tests.auth_helpers import authenticated_client
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -25,7 +23,7 @@ def _published_official(tmp_path, monkeypatch):
     source = tmp_path / "source"
     shutil.copytree(REPO_ROOT / "data" / "samples" / "small", source)
     batch = runtime_store.create_confirmed_batch(source)
-    client = TestClient(create_app())
+    client = authenticated_client()
     run = client.post("/api/ga/runs/preview", json={"batch_code": batch["batch_code"], "population_size": 12, "generations": 4, "seed": 42}).json()
     official_response = client.post(f"/api/ga/runs/{run['run_code']}/publish", json={"note": "Kiểm thử lịch chính thức"})
     assert official_response.status_code == 200
@@ -110,3 +108,15 @@ def test_makeup_session_is_added_only_after_conflict_check(tmp_path, monkeypatch
 
     assert response.status_code == 200
     assert response.json()["official"]["makeup_sessions"][0]["status"] == "MAKEUP"
+
+
+def test_skipped_holiday_sessions_include_course_and_lecturer_context(tmp_path, monkeypatch) -> None:
+    client, run, _official = _published_official(tmp_path, monkeypatch)
+    skipped = run["skipped_holiday_sessions"]
+    assert skipped
+    first = skipped[0]
+    assert first["course_code"]
+    assert first["course_name"]
+    assert first["lecturer_code"]
+    assert first["lecturer_name"]
+    assert first["status"] == "MISSING"

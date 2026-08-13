@@ -7,15 +7,18 @@ from html import escape
 from io import StringIO
 from io import BytesIO
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from backend.app.api.dependencies import require_roles
 from backend.app.algorithms.genetic.simple_ga import GeneticAlgorithmConfig, run_simple_genetic_algorithm
 from backend.app.algorithms.genetic.soft_constraints import SoftConstraintWeights
 from backend.app.importing.csv_validator import validate_sample_dataset
+from backend.app.db.models import AppUserModel
+from backend.app.domain.auth import UserRole
 from backend.app.scheduling.calendar_expansion import expand_base_assignments_to_occurrences
 from backend.app.services.runtime_store import (
     batch_directory,
@@ -32,7 +35,16 @@ from backend.app.services.runtime_store import (
 )
 
 
-router = APIRouter(prefix="/api/ga", tags=["ga"])
+router = APIRouter(
+    prefix="/api/ga",
+    tags=["ga"],
+    dependencies=[Depends(require_roles(UserRole.TRAINING_OFFICE))],
+)
+
+TrainingOfficeUser = Annotated[
+    AppUserModel,
+    Depends(require_roles(UserRole.TRAINING_OFFICE)),
+]
 
 
 class SoftWeightsRequest(BaseModel):
@@ -163,7 +175,20 @@ def run_ga_preview(request: GaRunRequest) -> dict[str, object]:
         for item in expansion.occurrences
     ]
     response["skipped_holiday_sessions"] = [
-        {"section_code": item.section_code, "room_code": item.room_code, "slot_code": item.slot_code, "date": item.date.isoformat(), "academic_week": item.academic_week, "holiday_name": item.holiday_name}
+        {
+            "section_code": item.section_code,
+            "course_code": data.course_sections[item.section_code].course_code,
+            "course_name": data.course_sections[item.section_code].course_name,
+            "lecturer_code": data.course_sections[item.section_code].lecturer_code,
+            "lecturer_name": data.lecturers[data.course_sections[item.section_code].lecturer_code].lecturer_name,
+            "course_type": data.course_sections[item.section_code].course_type,
+            "room_code": item.room_code,
+            "slot_code": item.slot_code,
+            "date": item.date.isoformat(),
+            "academic_week": item.academic_week,
+            "holiday_name": item.holiday_name,
+            "status": "MISSING",
+        }
         for item in expansion.skipped_holiday_sessions
     ]
     if request.batch_code:
@@ -334,7 +359,11 @@ def get_official_timetable(official_code: str) -> dict[str, object]:
 
 
 @router.put("/official-timetables/{official_code}/adjustments")
-def adjust_official_timetable(official_code: str, request: OfficialAdjustmentRequest) -> dict[str, object]:
+def adjust_official_timetable(
+    official_code: str,
+    request: OfficialAdjustmentRequest,
+    current_user: TrainingOfficeUser,
+) -> dict[str, object]:
     official = read_official_timetable(official_code)
     data = _official_input_data(official)
     affected = _select_affected_occurrences(official, request)
@@ -346,15 +375,19 @@ def adjust_official_timetable(official_code: str, request: OfficialAdjustmentReq
     _validate_effective_occurrence_conflicts(data, official)
     current = [{key: item.get(key) for key in ("date", "room_code", "slot_code", "academic_week", "status")} for item in affected]
     history = list(official.get("change_history", []))
-    history.append({"section_code": request.section_code, "scope": request.scope, "previous": previous, "current": current, "reason": request.reason.strip(), "changed_at": datetime.now(timezone.utc).isoformat()})
+    history.append({"section_code": request.section_code, "scope": request.scope, "previous": previous, "current": current, "reason": request.reason.strip(), "changed_by": current_user.username, "changed_at": datetime.now(timezone.utc).isoformat()})
     official["change_history"] = history
     write_official_timetable(official_code, official)
-    persist_change_log(None, request.section_code, {"occurrences": previous}, {"occurrences": current}, scope=request.scope, reason=request.reason.strip(), official_code=official_code)
+    persist_change_log(None, request.section_code, {"occurrences": previous}, {"occurrences": current}, scope=request.scope, reason=request.reason.strip(), official_code=official_code, changed_by=current_user.username)
     return {"message": "Đã điều chỉnh lịch chính thức sau khi kiểm tra ràng buộc.", "official": official}
 
 
 @router.post("/official-timetables/{official_code}/segments")
-def create_schedule_segment(official_code: str, request: ScheduleSegmentRequest) -> dict[str, object]:
+def create_schedule_segment(
+    official_code: str,
+    request: ScheduleSegmentRequest,
+    current_user: TrainingOfficeUser,
+) -> dict[str, object]:
     if request.effective_end_date < request.effective_start_date:
         raise HTTPException(status_code=422, detail="Ngày kết thúc phân đoạn phải sau hoặc bằng ngày bắt đầu.")
     official = read_official_timetable(official_code)
@@ -378,12 +411,16 @@ def create_schedule_segment(official_code: str, request: ScheduleSegmentRequest)
     _validate_effective_occurrence_conflicts(data, official)
     write_official_timetable(official_code, official)
     sync_official_segments_and_makeups(official_code, official)
-    persist_change_log(None, request.section_code, {}, segment, scope="DATE_RANGE_SEGMENT", reason=request.reason.strip(), official_code=official_code)
+    persist_change_log(None, request.section_code, {}, segment, scope="DATE_RANGE_SEGMENT", reason=request.reason.strip(), official_code=official_code, changed_by=current_user.username)
     return {"message": "Đã tạo phân đoạn lịch và cập nhật các buổi nằm trong khoảng hiệu lực.", "official": official}
 
 
 @router.post("/official-timetables/{official_code}/makeups")
-def create_makeup_session(official_code: str, request: MakeupSessionRequest) -> dict[str, object]:
+def create_makeup_session(
+    official_code: str,
+    request: MakeupSessionRequest,
+    current_user: TrainingOfficeUser,
+) -> dict[str, object]:
     official = read_official_timetable(official_code)
     data = _official_input_data(official)
     section = data.course_sections.get(request.section_code)
@@ -399,7 +436,7 @@ def create_makeup_session(official_code: str, request: MakeupSessionRequest) -> 
     _validate_effective_occurrence_conflicts(data, official)
     write_official_timetable(official_code, official)
     sync_official_segments_and_makeups(official_code, official)
-    persist_change_log(None, request.section_code, {}, placeholder, scope="MAKEUP", reason=request.reason.strip(), official_code=official_code)
+    persist_change_log(None, request.section_code, {}, placeholder, scope="MAKEUP", reason=request.reason.strip(), official_code=official_code, changed_by=current_user.username)
     return {"message": "Đã thêm buổi học bù sau khi kiểm tra ràng buộc.", "official": official}
 
 
