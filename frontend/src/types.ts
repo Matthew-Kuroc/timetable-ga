@@ -1,3 +1,45 @@
+export type UserRole = "ADMIN" | "TRAINING_OFFICE" | "LECTURER";
+
+export interface AuthUser {
+  id: number;
+  username: string;
+  display_name: string;
+  role: UserRole;
+  active: boolean;
+  lecturer_code?: string | null;
+}
+
+export interface LoginResponse {
+  user: AuthUser;
+  expires_at: string;
+}
+
+export interface AdminUser extends AuthUser {
+  created_at?: string;
+  updated_at?: string;
+  last_login_at?: string | null;
+}
+
+export interface UserWriteInput {
+  username?: string;
+  display_name?: string;
+  password?: string;
+  role?: UserRole;
+  active?: boolean;
+  lecturer_code?: string | null;
+}
+
+export interface AuditLog {
+  id: number;
+  action: string;
+  actor_username?: string | null;
+  target_user_id?: number | null;
+  target_username?: string | null;
+  old_value?: Record<string, unknown> | null;
+  new_value?: Record<string, unknown> | null;
+  created_at: string;
+}
+
 export type CourseType = "THEORY" | "PRACTICE" | "INTEGRATED";
 
 export interface Assignment {
@@ -27,6 +69,11 @@ export interface Occurrence {
 
 export interface SkippedHolidaySession extends Occurrence {
   holiday_name?: string;
+  course_code?: string;
+  course_name?: string;
+  lecturer_code?: string;
+  lecturer_name?: string;
+  course_type?: CourseType;
 }
 
 export interface Run {
@@ -85,4 +132,132 @@ export interface Batch {
 }
 export interface CsvError { file?: string; row?: number; column?: string; value?: string; reason: string; }
 export interface Preview { valid: boolean; files?: { file: string; row_count: number; headers?: string[] }[]; errors?: CsvError[]; }
-export interface AdjustmentSlot { slot_code: string; start_period: number; end_period: number; rooms: { room_code: string; room_name: string; capacity: number }[]; }
+export interface AdjustmentSlot { slot_code: string; day_of_week?: number; start_period: number; end_period: number; rooms: { room_code: string; room_name: string; capacity: number }[]; }
+
+export interface LecturerCourseSection {
+  section_code: string;
+  course_code?: string;
+  course_name?: string;
+  course_type?: CourseType;
+  required_sessions?: number;
+  periods_per_session?: number;
+  scheduling_student_count?: number;
+  room_code?: string;
+  slot_code?: string;
+  day_of_week?: number;
+  start_period?: number;
+  end_period?: number;
+}
+
+export interface LecturerTimetableOccurrence extends Occurrence {
+  course_code?: string;
+  course_name?: string;
+  lecturer_code?: string;
+  lecturer_name?: string;
+  day_of_week?: number;
+  start_period?: number;
+  end_period?: number;
+  course_type?: CourseType;
+}
+
+export interface LecturerTimetable {
+  official_code: string | null;
+  academic_week: number;
+  lecturer_code: string;
+  lecturer_name: string;
+  occurrences: LecturerTimetableOccurrence[];
+  course_sections: LecturerCourseSection[];
+}
+
+export type LecturerChangeRequestType =
+  | "SUSPEND_ONE_OCCURRENCE"
+  | "MOVE_ONE_OCCURRENCE";
+
+export type LecturerChangeRequestStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "APPLIED";
+
+export interface ChangeRequestHardConflict {
+  code: string;
+  message: string;
+}
+
+export interface ChangeRequestValidation {
+  valid: boolean;
+  hard_conflicts: ChangeRequestHardConflict[];
+  checked_at: string;
+  official_code?: string;
+  request_code?: string;
+}
+
+export interface ChangeRequestSnapshot {
+  section_code?: string;
+  occurrence_date?: string | null;
+  date?: string | null;
+  room_code?: string | null;
+  slot_code?: string | null;
+  status?: string;
+  academic_week?: number;
+  start_period?: number;
+  end_period?: number;
+  [key: string]: unknown;
+}
+
+export interface ChangeRequestEvent {
+  id?: number;
+  event_type?: string;
+  action?: string;
+  from_status?: LecturerChangeRequestStatus | null;
+  to_status?: LecturerChangeRequestStatus | null;
+  status?: LecturerChangeRequestStatus;
+  actor_username?: string | null;
+  actor_display_name?: string | null;
+  note?: string | null;
+  created_at: string;
+}
+
+export interface LecturerChangeRequest {
+  request_code: string;
+  official_code: string;
+  requester_username: string;
+  requester_display_name: string;
+  section_code: string;
+  request_type: LecturerChangeRequestType;
+  occurrence_date: string;
+  reason: string;
+  proposed_date?: string | null;
+  proposed_slot_code?: string | null;
+  proposed_room_code?: string | null;
+  current_snapshot?: ChangeRequestSnapshot | null;
+  proposal_snapshot?: ChangeRequestSnapshot | null;
+  status: LecturerChangeRequestStatus;
+  reviewer_username?: string | null;
+  reviewer_display_name?: string | null;
+  review_note?: string | null;
+  validation_result?: ChangeRequestValidation | null;
+  created_at: string;
+  updated_at: string;
+  reviewed_at?: string | null;
+  applied_at?: string | null;
+  cancelled_at?: string | null;
+  events: ChangeRequestEvent[];
+}
+
+export interface CreateLecturerChangeRequestInput {
+  official_code: string;
+  section_code: string;
+  request_type: LecturerChangeRequestType;
+  occurrence_date: string;
+  reason: string;
+  proposed_date?: string;
+  proposed_slot_code?: string;
+  proposed_room_code?: string;
+}
+
+export interface ChangeRequestListResponse {
+  requests: LecturerChangeRequest[];
+  total: number;
+}

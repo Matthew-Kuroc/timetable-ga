@@ -1,7 +1,26 @@
 ﻿# Ban Giao Va Backlog Hien Tai
 
-Cap nhat: 07/08/2026. Day la tai lieu ban giao ky thuat cho phien Codex sau.
+Cap nhat: 10/08/2026. Day la tai lieu ban giao ky thuat cho phien Codex sau.
 URS/SRS trong `docs/requirements/` van la nguon yeu cau nghiep vu chinh thuc.
+
+## Checkpoint Phien 13/08/2026
+
+Trang thai: **P2.7 da hoan tat**, migration da nang cap thanh cong tren
+PostgreSQL muc tieu; da bo sung va chay smoke UI/E2E.
+
+- Da kiem ke worktree va giu nguyen toan bo thay doi dang do ve dang nhap,
+  phan quyen, cong Quan tri vien va cong Giang vien. Khong reset/ghi de thay
+  doi co san.
+- Da xac minh lai sau khi phien bi dung: backend `67 passed`; frontend
+  `npm run build` thanh cong voi 28 modules.
+- P2 muc 7 da co API, service, migration, giao dien va test cho viec giang
+  vien gui/theo doi/huy; Phong Dao tao kiem tra, phe duyet, tu choi/ap dung;
+  moi buoc co lich su va kiem tra lai rang buoc cung.
+- Chua tu dat han khoa cho yeu cau doi toan bo lich lap. URS/SRS van ghi han
+  nay la quyet dinh can xac nhan, nen phan do se phai tra loi ro rang cho den
+  khi co cau hinh nghiep vu chinh thuc.
+- Migration `20260813_0007` da chay thanh cong tren PostgreSQL that; Alembic
+  dang o revision `20260813_0007 (head)` va ba bang yeu cau/audit da ton tai.
 
 ## Cach Bat Dau Phien Moi
 
@@ -55,14 +74,23 @@ bien moi truong; khong ghi mat khau vao ma nguon, tai lieu hay Git.
   bao gom cac thay doi mot buoi; khong chi xuat assignment lich co so.
 - Da co lich su 10 lan chay gan nhat tai Tong quan:
   `GET /api/ga/runs` va `GET /api/ga/runs/{run_code}`.
-- Ket qua kiem thu gan nhat: `47 passed`; da kiem tra cu phap `frontend/app.js`
-  bang `node --check`.
+- Da hoan thanh dang nhap/phan quyen MVP voi dung mot role tren moi tai khoan:
+  `ADMIN`, `TRAINING_OFFICE` hoac `LECTURER`. Backend bao ve API theo role;
+  frontend co cong rieng cho tung role va xu ly phien dang nhap het han.
+- Da co migration `20260810_0006`, CLI bootstrap `ADMIN` dau tien khong dung
+  mat khau mac dinh, phien opaque-token luu bang cookie HttpOnly va audit tai
+  khoan/xac thuc.
+- Xac minh cuoi phien: backend `67 passed`; frontend `npm run build` thanh cong
+  voi 28 modules; Playwright smoke E2E `2 passed`.
 
 ### Chua hoan thanh
 
-- Chua co dang nhap/phan quyen, lich ca nhan giang vien va yeu cau doi lich.
-- Chua co kiem thu giao dien tu dong/end-to-end. Form giao dien chua co thao
-  tac rieng de tao phan doan va buoi bu (API va kiem thu backend da co).
+- Da co framework Playwright va E2E cho dang nhap, dieu huong theo role, lich
+  su/huy yeu cau, Phong Dao tao kiem tra-phe duyet-ap dung, loc/xuat ket qua,
+  hien thi ngay nghi va cong cu phan doan/buoi bu; `4 passed`.
+- Danh sach buoi thieu do ngay nghi da hien thi theo bang co tim kiem, loc
+  giang vien, phan trang va thong tin mon/lop/giang vien/ngay/tuan/ly do; form
+  buoi bu van giu kiem tra rang buoc cung o backend.
 
 ## Backlog Uu Tien
 
@@ -73,25 +101,28 @@ bien moi truong; khong ghi mat khau vao ma nguon, tai lieu hay Git.
 3. Dieu chinh theo pham vi occurrence/khoang ngay/tu ngay den het hoc phan.
 4. Phan doan lich va buoi bu thu cong co kiem tra rang buoc.
 5. Bo sung migration, kiem thu API va cap nhat tai lieu ban giao.
+6. Dang nhap/phan quyen MVP voi ba role, quan ly tai khoan `ADMIN`, lich ca
+   nhan giang vien va route/navigation theo role.
 
 ### P1 - Lich theo ngay va ngoai le
 
-3. Bo sung form giao dien rieng cho phan doan lich va buoi bu; hien thi buoi
-   thieu do ngay nghi va lien ket buoi bu voi buoi bi thieu.
+- [x] 3. Da bo sung form giao dien rieng cho phan doan lich va buoi bu; hien
+  thi buoi thieu do ngay nghi va lien ket buoi bu voi buoi bi thieu.
 
 ### P2 - Nguoi dung va phe duyet
 
-6. Dang nhap/phan quyen MVP: `ADMIN`, `TRAINING_OFFICE` va `LECTURER` theo
-   URS/SRS. Theo quyet dinh hien tai, bat dau sau khi ket thuc 5 muc tren.
-7. Yeu cau doi lich: giang vien gui, Phong Dao tao duyet/tu choi/ap dung sau
-   kiem tra rang buoc cung; luu day du lich su.
+- [x] 6. Dang nhap/phan quyen MVP: `ADMIN`, `TRAINING_OFFICE` va `LECTURER`
+  theo URS/SRS; moi tai khoan co dung mot role va backend la lop phan quyen
+  quyet dinh.
+- [x] 7. Yeu cau doi lich: giang vien gui, Phong Dao tao duyet/tu choi/ap dung
+  sau kiem tra rang buoc cung; luu day du lich su. Da hoan tat trong worktree.
 
 ### P3 - Chat luong
 
 8. Xuat theo giang vien, phong, lop hoc phan va occurrence theo ngay; ten file
    co run code va thoi diem.
 9. Mo rong test API/UI cho adjustment scope, segment, buoi bu, phan quyen,
-   request workflow va PostgreSQL persistence.
+   request workflow va PostgreSQL persistence; bo sung E2E cho cac form con lai.
 
 ## Doi Chieu De Tai Thuc Tap Goc
 
@@ -126,9 +157,8 @@ Khong bo cac muc nay sau khi hoan thanh cac yeu cau cot loi cua de tai.
 
 ## Buoc Nen Lam Tiep
 
-Bat dau P2: dang nhap/phan quyen voi ba vai tro theo URS/SRS, sau do ket noi
-quy trinh yeu cau doi lich cua giang vien. Khong mo rong GA thanh mot gene cho
-moi occurrence.
+Mo rong E2E cho cac form phan doan, buoi bu va hien thi buoi thieu; sau do mo
+rong kiem thu export theo P3. Khong mo rong GA thanh mot gene cho moi occurrence.
 
 ## Ghi Chu Luu Tru (Khong Con Phan Anh Trang Thai Hien Tai)
 

@@ -4,8 +4,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+from backend.app.api.dependencies import require_roles
+from backend.app.domain.auth import UserRole
 from backend.app.importing.import_preview import (
     REQUIRED_DATASET_FILES,
     DatasetPreviewResult,
@@ -14,7 +16,11 @@ from backend.app.importing.import_preview import (
 from backend.app.services.runtime_store import create_confirmed_batch
 
 
-router = APIRouter(prefix="/api/imports", tags=["imports"])
+router = APIRouter(
+    prefix="/api/imports",
+    tags=["imports"],
+    dependencies=[Depends(require_roles(UserRole.TRAINING_OFFICE))],
+)
 
 
 @router.post("/csv/preview")
