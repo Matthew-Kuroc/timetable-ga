@@ -1,13 +1,19 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from backend.app.api.dependencies import require_roles
+from backend.app.domain.auth import UserRole
 from backend.app.importing.import_preview import REQUIRED_DATASET_FILES
 from backend.app.services.runtime_store import batch_summary, list_batches, read_batch_file, update_batch_file
 
 
-router = APIRouter(prefix="/api/batches", tags=["batches"])
+router = APIRouter(
+    prefix="/api/batches",
+    tags=["batches"],
+    dependencies=[Depends(require_roles(UserRole.TRAINING_OFFICE))],
+)
 
 
 class CsvSaveRequest(BaseModel):

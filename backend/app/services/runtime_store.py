@@ -276,6 +276,7 @@ def persist_change_log(
     scope: str = "BASE_WEEKLY_SCHEDULE",
     reason: str | None = None,
     official_code: str | None = None,
+    changed_by: str,
 ) -> None:
     with get_session_local()() as session:
         session.add(ScheduleChangeLogModel(
@@ -286,7 +287,7 @@ def persist_change_log(
             previous_value=previous,
             current_value=current,
             reason=reason,
-            changed_by="training_office",
+            changed_by=changed_by,
             changed_at=datetime.now(timezone.utc).replace(tzinfo=None),
         ))
         session.commit()

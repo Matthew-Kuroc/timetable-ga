@@ -9,9 +9,16 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.datasets import router as datasets_router
+from backend.app.api.auth import router as auth_router
+from backend.app.api.admin import router as admin_router
 from backend.app.api.batches import router as batches_router
 from backend.app.api.ga import router as ga_router
 from backend.app.api.imports import router as imports_router
+from backend.app.api.lecturer import router as lecturer_router
+from backend.app.api.change_requests import (
+    lecturer_change_requests_router,
+    training_change_requests_router,
+)
 from backend.app.core.config import get_settings
 from backend.app.db.session import DatabaseConfigurationError
 
@@ -25,15 +32,20 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=503, content={"detail": str(error)})
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
+        allow_origins=list(settings.cors_origins),
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
     app.include_router(datasets_router)
+    app.include_router(auth_router)
+    app.include_router(admin_router)
     app.include_router(batches_router)
     app.include_router(imports_router)
     app.include_router(ga_router)
+    app.include_router(lecturer_router)
+    app.include_router(lecturer_change_requests_router)
+    app.include_router(training_change_requests_router)
 
     frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
     frontend_dist_dir = frontend_dir / "dist"

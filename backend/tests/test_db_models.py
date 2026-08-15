@@ -11,8 +11,11 @@ from backend.app.db import models
 class DatabaseModelTests(unittest.TestCase):
     def test_core_tables_are_declared(self) -> None:
         expected_tables = {
+            "account_audit_logs",
             "academic_calendar_dates",
             "academic_terms",
+            "app_users",
+            "auth_sessions",
             "import_batches",
             "lecturers",
             "rooms",
@@ -27,6 +30,18 @@ class DatabaseModelTests(unittest.TestCase):
         }
 
         self.assertTrue(expected_tables.issubset(Base.metadata.tables.keys()))
+
+    def test_auth_tables_have_required_columns(self) -> None:
+        user_columns = Base.metadata.tables["app_users"].columns.keys()
+        session_columns = Base.metadata.tables["auth_sessions"].columns.keys()
+        audit_columns = Base.metadata.tables["account_audit_logs"].columns.keys()
+
+        for column in ("username", "password_hash", "role", "active", "lecturer_code"):
+            self.assertIn(column, user_columns)
+        for column in ("user_id", "token_hash", "expires_at", "revoked_at"):
+            self.assertIn(column, session_columns)
+        for column in ("actor_user_id", "target_user_id", "action", "old_value", "new_value"):
+            self.assertIn(column, audit_columns)
 
     def test_course_sections_have_required_columns(self) -> None:
         columns = Base.metadata.tables["course_sections"].columns.keys()

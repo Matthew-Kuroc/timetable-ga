@@ -100,6 +100,17 @@ viên, Phòng đào tạo và Giảng viên. Chỉ tài khoản được Quản 
 được phép đăng nhập; hệ thống không phục vụ tài khoản sinh viên hoặc người
 ngoài.
 
+Trong MVP, mỗi tài khoản có **đúng một** role. Quyền được kiểm tra tại backend;
+việc ẩn nút hoặc menu trên frontend không thay thế cho kiểm tra phân quyền.
+
+| Nhóm chức năng | `ADMIN` | `TRAINING_OFFICE` | `LECTURER` |
+| --- | --- | --- | --- |
+| Quản lý tài khoản, gán role và xem audit xác thực | Có | Không | Không |
+| Nhập CSV, chạy GA, công bố, chỉnh sửa và xuất lịch | Không | Có | Không |
+| Xem toàn bộ thời khóa biểu và lịch sử vận hành | Không | Có | Không |
+| Xem lịch và lớp học phần của cá nhân | Không | Có, trong phạm vi toàn hệ thống | Chỉ dữ liệu gắn với mã giảng viên của mình |
+| Yêu cầu điều chỉnh lịch | Không | Kiểm tra, duyệt, từ chối và áp dụng | Gửi, theo dõi và hủy yêu cầu đang chờ của mình |
+
 ### 3.1. Quản trị viên
 
 Quản trị viên có thể:
@@ -109,8 +120,9 @@ Quản trị viên có thể:
 - Tìm kiếm, cập nhật, kích hoạt hoặc vô hiệu hóa tài khoản.
 - Xem lịch sử thay đổi tài khoản và hoạt động xác thực.
 
-Quản trị viên không mặc nhiên được upload dữ liệu, chạy GA hoặc chỉnh sửa
-thời khóa biểu nếu chưa được cấp thêm quyền Phòng đào tạo.
+Trong MVP một-role, tài khoản `ADMIN` không được upload dữ liệu, chạy GA hoặc
+chỉnh sửa thời khóa biểu. Hỗ trợ một tài khoản đồng thời có nhiều role vẫn là
+vấn đề chờ xác nhận và chưa được bật.
 
 ### 3.2. Phòng đào tạo
 
@@ -487,6 +499,16 @@ Các trạng thái dự kiến:
 - `CANCELLED`: Đã hủy.
 - `APPLIED`: Đã áp dụng.
 
+Trong lát cắt MVP hiện tại, giảng viên có thể đề nghị tạm ngưng hoặc chuyển
+một buổi học cụ thể. Hệ thống tạo yêu cầu ở trạng thái `PENDING` và không sửa
+lịch chính thức. Phòng đào tạo kiểm tra ràng buộc trước khi chuyển yêu cầu sang
+`APPROVED`; thao tác áp dụng sẽ kiểm tra lại trên phiên bản lịch hiện tại rồi
+mới chuyển sang `APPLIED` và ghi audit. Yêu cầu `PENDING` cũng có thể được
+giảng viên hủy hoặc Phòng đào tạo từ chối kèm lý do.
+
+Đổi toàn bộ lịch lặp chưa được bật vì hạn khóa nghiệp vụ vẫn cần được xác nhận
+và cấu hình theo `FR-REQ-09`; hệ thống không tự đặt một hạn mặc định.
+
 ### 9.3. Phạm vi chỉnh sửa
 
 Phòng đào tạo có thể chọn:
@@ -842,6 +864,65 @@ thay đổi yêu cầu nghiệp vụ.
 - Pydantic.
 - pytest.
 
+### Cấu hình PostgreSQL và xác thực MVP
+
+Sao chép file cấu hình mẫu, sau đó thay `YOUR_POSTGRES_PASSWORD` bằng mật khẩu
+PostgreSQL local. Không commit file `.env` thật.
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Các biến môi trường liên quan:
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `DATABASE_URL` | Chuỗi kết nối PostgreSQL; bắt buộc đối với migration và backend. |
+| `APP_NAME` | Tên hiển thị của FastAPI. |
+| `AUTH_SESSION_TTL_MINUTES` | Thời gian sống của phiên đăng nhập theo phút; mặc định `480`. |
+| `AUTH_COOKIE_SECURE` | Đặt `false` khi chạy HTTP local và `true` khi triển khai qua HTTPS. |
+| `CORS_ORIGINS` | Danh sách origin frontend được gửi cookie phiên, phân cách bằng dấu phẩy; mặc định cho Vite tại `127.0.0.1:5173` và `localhost:5173`. |
+
+Từ thư mục gốc repository, áp dụng toàn bộ migration. Migration mới nhất hiện
+tại là `20260813_0007_schedule_change_requests.py`:
+
+```powershell
+$env:PYTHONPATH='.'
+python -m alembic upgrade head
+```
+
+Tạo tài khoản `ADMIN` đầu tiên bằng CLI:
+
+```powershell
+python -m backend.app.cli.bootstrap_admin --username admin --display-name "Quản trị viên"
+```
+
+CLI yêu cầu nhập và xác nhận mật khẩu bằng prompt ẩn, không nhận mật khẩu qua
+tham số và không có mật khẩu mặc định. Lệnh chỉ bootstrap khi hệ thống chưa có
+tài khoản `ADMIN`; các tài khoản tiếp theo được tạo trong cổng Quản trị viên.
+
+Sau khi chạy backend và frontend, mở `#/login` để đăng nhập. Đăng nhập thành
+công sẽ chuyển người dùng tới cổng đúng với role duy nhất của tài khoản. Nút
+**Đăng xuất** thu hồi phiên ở backend và xóa cookie `timetable_session`.
+Backend cung cấp các endpoint xác thực sau:
+
+- `POST /api/auth/login`: nhận `username` và `password`.
+- `GET /api/auth/me`: kiểm tra phiên hiện tại.
+- `POST /api/auth/logout`: thu hồi phiên và xóa cookie.
+
+Các endpoint yêu cầu điều chỉnh lịch được tách theo vai trò:
+
+- Giảng viên: `POST/GET /api/lecturer/change-requests`, xem chi tiết, lấy lựa
+  chọn hợp lệ và hủy yêu cầu còn `PENDING`.
+- Phòng đào tạo: `GET /api/training-office/change-requests`, kiểm tra xung đột,
+  phê duyệt, từ chối hoặc áp dụng một yêu cầu đã được phê duyệt.
+
+Backend vẫn là lớp quyết định quyền truy cập và ràng buộc cứng; frontend chỉ
+hiển thị kết quả kiểm tra và trạng thái workflow.
+
+Cookie phiên là HttpOnly, dùng `SameSite=Lax`; thuộc tính `Secure` được điều
+khiển bởi `AUTH_COOKIE_SECURE`.
+
 ### Frontend
 
 - React 19.
@@ -903,11 +984,9 @@ Dự án hiện đang ở giai đoạn:
 - Chuẩn bị thiết kế dữ liệu mẫu.
 - Chuẩn bị thiết kế backend, frontend và thuật toán.
 
-Các lệnh cài đặt và chạy hệ thống sẽ được bổ sung sau khi cấu trúc backend và
-frontend được khởi tạo.
-
-Không sử dụng các lệnh cài đặt chưa được xác nhận hoặc chưa tồn tại trong
-repository.
+Các lệnh migration, bootstrap `ADMIN`, chạy backend và chạy frontend được mô
+tả tại mục 17. Chỉ sử dụng các lệnh đã tồn tại trong repository và không đưa
+credential thật vào mã nguồn hoặc tài liệu.
 
 ---
 

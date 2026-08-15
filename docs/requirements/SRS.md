@@ -45,7 +45,7 @@ This document specifies software requirements for a web application that support
 
 | Actor | Main permissions | Limits |
 | --- | --- | --- |
-| Administrator | Log in; create and manage approved user accounts; assign Administrator, Training Office or Lecturer roles; activate/deactivate access; view account/audit information. | Does not upload data, run GA or edit official timetables unless separately granted the Training Office role. Cannot create student or public accounts. |
+| Administrator | Log in; create and manage approved user accounts; assign Administrator, Training Office or Lecturer roles; activate/deactivate access; view account/audit information. | In the MVP one-role model, does not upload data, run GA or edit official timetables. Multi-role access remains pending confirmation. Cannot create student or public accounts. |
 | Training Department / Manager | Log in; import data; configure and run GA; view all schedules; receive, check, approve or reject change requests; apply changes; export data; view run and request history. | May apply changes only after data is valid and hard constraints are checked. |
 | Lecturer | Log in; view personal weekly timetable; view class details; submit suspend/move requests; track request status. | Cannot directly edit timetables, add classes, delete classes, reject classes, approve requests or edit another lecturer's timetable. |
 | Supervisor / tester | Provide data, test functions and evaluate results. | May not be a regular operational account. |
@@ -208,6 +208,18 @@ This document specifies software requirements for a web application that support
 | FR-REQ-11 | System stores request/change history: requester, approver, time, old data, new data, reason and status. | Must | Full trace is available from request to applied schedule. |
 | FR-REQ-12 | Lecturer can cancel a request while it is Pending. | Should | Request becomes Cancelled and cannot be approved. |
 
+Implementation note (13/08/2026): the MVP workflow separates approval from
+application. A valid request follows `PENDING -> APPROVED -> APPLIED`; a
+pending request may instead become `REJECTED` or `CANCELLED`. Approval does not
+change the official timetable. Application rechecks the current official
+timetable and all hard constraints before saving the change and audit history
+in one transaction.
+
+The first implemented request slice covers suspending or moving one dated
+occurrence. `MOVE_RECURRING_SCHEDULE` remains unavailable until the business
+deadline required by `FR-REQ-09` is explicitly configured; the system must
+return an actionable message instead of inventing a deadline.
+
 ### 8.6 Export
 
 | Code | Requirement | Priority | Acceptance criteria |
@@ -352,6 +364,8 @@ This document specifies software requirements for a web application that support
 - Training Department approval is required before applying changes.
 - Authorization must be enforced by backend APIs.
 - Only Administrator-provisioned active accounts may log in; students and outside users are not application actors.
+- The MVP implementation follows `FR-ADMIN-02`: each account has exactly one application role. An `ADMIN` account is separated from timetable operations and does not inherit `TRAINING_OFFICE` permissions.
+- Multi-role accounts and a password-reset workflow are not implemented in the MVP; both remain pending supervisor confirmation.
 - Administrator, Training Department and Lecturer are the proposed application roles; the permission matrix and account-lifecycle policy require supervisor confirmation.
 - Lecturer portal uses a weekly calendar with week navigation; the exact visual design remains an implementation decision.
 - The Training Department prepares the complete seven-file CSV batch in Excel, previews and validates it, then confirms it before it can be used by GA. Built-in sample data is only for development and demonstration.
@@ -366,5 +380,5 @@ This document specifies software requirements for a web application that support
 - Make-up class rules after suspension need confirmation.
 - Initial soft-constraint weights need confirmation.
 - Run-time targets depend on actual machine and dataset scale.
-- Authentication provider, password-reset policy and whether an Administrator may also hold the Training Office role need confirmation.
+- Authentication provider, password-reset policy and future multi-role support, including whether an Administrator may also hold the Training Office role, need confirmation. The current MVP uses one local application role per account.
 

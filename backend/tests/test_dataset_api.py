@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import shutil
 
-from fastapi.testclient import TestClient
-
-from backend.app.main import create_app
 from backend.app.api import datasets
+from backend.tests.auth_helpers import authenticated_client
 
 
 def test_official_dataset_file_list_and_read_endpoint() -> None:
-    client = TestClient(create_app())
+    client = authenticated_client()
 
     list_response = client.get("/api/datasets/official/files")
     assert list_response.status_code == 200
@@ -28,7 +26,7 @@ def test_rejects_invalid_dataset_change_without_overwriting_file(tmp_path, monke
     official_copy = tmp_path / "official"
     shutil.copytree(datasets.OFFICIAL_DATASET_DIR, official_copy)
     monkeypatch.setattr(datasets, "OFFICIAL_DATASET_DIR", official_copy)
-    client = TestClient(create_app())
+    client = authenticated_client()
 
     original_content = (official_copy / "rooms.csv").read_text(encoding="utf-8")
     response = client.put("/api/datasets/official/files/rooms.csv", json={"rows": []})
@@ -42,7 +40,7 @@ def test_saved_dataset_file_uses_utf8_bom_for_excel(tmp_path, monkeypatch) -> No
     official_copy = tmp_path / "official"
     shutil.copytree(datasets.OFFICIAL_DATASET_DIR, official_copy)
     monkeypatch.setattr(datasets, "OFFICIAL_DATASET_DIR", official_copy)
-    client = TestClient(create_app())
+    client = authenticated_client()
 
     original_rows = client.get("/api/datasets/official/files/rooms.csv").json()["rows"]
     response = client.put("/api/datasets/official/files/rooms.csv", json={"rows": original_rows})
