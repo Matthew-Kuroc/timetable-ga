@@ -1,12 +1,90 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Enum as SQLEnum
 from backend.app.db.base import Base
+
+
+class AppUserModel(Base):
+    __tablename__ = "app_users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(String(30), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    lecturer_code: Mapped[str | None] = mapped_column(String(50), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    sessions: Mapped[list[AuthSessionModel]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    submitted_schedule_change_requests: Mapped[list[ScheduleChangeRequestModel]] = relationship(
+        foreign_keys="ScheduleChangeRequestModel.requester_user_id",
+        back_populates="requester",
+    )
+    reviewed_schedule_change_requests: Mapped[list[ScheduleChangeRequestModel]] = relationship(
+        foreign_keys="ScheduleChangeRequestModel.reviewer_user_id",
+        back_populates="reviewer",
+    )
+
+
+class AuthSessionModel(Base):
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("app_users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[AppUserModel] = relationship(back_populates="sessions")
+
+
+class AccountAuditModel(Base):
+    __tablename__ = "account_audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("app_users.id"), index=True)
+    target_user_id: Mapped[int | None] = mapped_column(ForeignKey("app_users.id"), index=True)
+    actor_username: Mapped[str | None] = mapped_column(String(80))
+    target_username: Mapped[str | None] = mapped_column(String(80), index=True)
+    action: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    old_value: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    new_value: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
 
 
 class ImportBatchModel(Base):
@@ -219,6 +297,10 @@ class ScheduleChangeLogModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_code: Mapped[str | None] = mapped_column(String(50), index=True)
     official_code: Mapped[str | None] = mapped_column(String(50), index=True)
+    request_id: Mapped[int | None] = mapped_column(
+        ForeignKey("schedule_change_requests.id", ondelete="RESTRICT"),
+        index=True,
+    )
     section_code: Mapped[str] = mapped_column(String(80), nullable=False)
     scope: Mapped[str] = mapped_column(String(40), nullable=False)
     previous_value: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
@@ -226,6 +308,10 @@ class ScheduleChangeLogModel(Base):
     reason: Mapped[str | None] = mapped_column(Text)
     changed_by: Mapped[str] = mapped_column(String(80), nullable=False, default="training_office")
     changed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    change_request: Mapped[ScheduleChangeRequestModel | None] = relationship(
+        back_populates="change_logs",
+    )
 
 
 class OfficialTimetableModel(Base):
@@ -245,6 +331,95 @@ class OfficialTimetableModel(Base):
     source_ga_run: Mapped[GaRunModel] = relationship(back_populates="official_timetables")
     segments: Mapped[list[ScheduleSegmentModel]] = relationship(back_populates="official_timetable", cascade="all, delete-orphan")
     makeup_sessions: Mapped[list[MakeupSessionModel]] = relationship(back_populates="official_timetable", cascade="all, delete-orphan")
+    change_requests: Mapped[list[ScheduleChangeRequestModel]] = relationship(
+        back_populates="official_timetable",
+    )
+
+
+class ScheduleChangeRequestModel(Base):
+    __tablename__ = "schedule_change_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    request_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    official_timetable_id: Mapped[int] = mapped_column(
+        ForeignKey("official_timetables.id"),
+        nullable=False,
+        index=True,
+    )
+    requester_user_id: Mapped[int] = mapped_column(ForeignKey("app_users.id"), nullable=False, index=True)
+    requester_username: Mapped[str] = mapped_column(String(80), nullable=False)
+    lecturer_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    section_code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    occurrence_date: Mapped[date] = mapped_column(Date, nullable=False)
+    request_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    proposed_date: Mapped[date | None] = mapped_column(Date)
+    proposed_slot_code: Mapped[str | None] = mapped_column(String(50))
+    proposed_room_code: Mapped[str | None] = mapped_column(String(50))
+    current_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    proposal_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING", index=True)
+    expected_official_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    reviewer_user_id: Mapped[int | None] = mapped_column(ForeignKey("app_users.id"), index=True)
+    reviewer_username: Mapped[str | None] = mapped_column(String(80))
+    review_note: Mapped[str | None] = mapped_column(Text)
+    validation_result: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    official_timetable: Mapped[OfficialTimetableModel] = relationship(back_populates="change_requests")
+    requester: Mapped[AppUserModel] = relationship(
+        foreign_keys=[requester_user_id],
+        back_populates="submitted_schedule_change_requests",
+    )
+    reviewer: Mapped[AppUserModel | None] = relationship(
+        foreign_keys=[reviewer_user_id],
+        back_populates="reviewed_schedule_change_requests",
+    )
+    events: Mapped[list[ScheduleChangeRequestEventModel]] = relationship(
+        back_populates="change_request",
+        order_by="ScheduleChangeRequestEventModel.created_at",
+        passive_deletes=True,
+    )
+    change_logs: Mapped[list[ScheduleChangeLogModel]] = relationship(
+        back_populates="change_request",
+        passive_deletes=True,
+    )
+
+
+class ScheduleChangeRequestEventModel(Base):
+    __tablename__ = "schedule_change_request_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    request_id: Mapped[int] = mapped_column(
+        ForeignKey("schedule_change_requests.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    action: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    from_status: Mapped[str | None] = mapped_column(String(20))
+    to_status: Mapped[str | None] = mapped_column(String(20))
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("app_users.id"), index=True)
+    actor_username: Mapped[str] = mapped_column(String(80), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True
+    )
+
+    change_request: Mapped[ScheduleChangeRequestModel] = relationship(back_populates="events")
+    actor: Mapped[AppUserModel | None] = relationship(foreign_keys=[actor_user_id])
 
 
 class ScheduleSegmentModel(Base):

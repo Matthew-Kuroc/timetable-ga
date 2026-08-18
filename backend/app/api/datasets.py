@@ -6,14 +6,20 @@ import tempfile
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from backend.app.api.dependencies import require_roles
+from backend.app.domain.auth import UserRole
 from backend.app.importing.import_preview import REQUIRED_DATASET_FILES
 from backend.app.importing.csv_validator import validate_sample_dataset
 
 
-router = APIRouter(prefix="/api/datasets", tags=["datasets"])
+router = APIRouter(
+    prefix="/api/datasets",
+    tags=["datasets"],
+    dependencies=[Depends(require_roles(UserRole.TRAINING_OFFICE))],
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 OFFICIAL_DATASET_DIR = REPO_ROOT / "data" / "samples" / "official"
