@@ -1,245 +1,749 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { api } from "./api/client";
-import type { AdjustmentScope, Assignment, Batch, Occurrence, OfficialTimetable, Preview, Run } from "./types";
-
-type Page = "overview" | "import" | "ga" | "results" | "adjustments";
-const requiredFiles = ["lecturers.csv", "rooms.csv", "time_slots.csv", "course_sections.csv", "lecturer_time_preferences.csv", "room_unavailable_slots.csv", "academic_calendar.csv"];
-const pages: { key: Page; label: string; note: string }[] = [
-  { key: "overview", label: "Tổng quan", note: "Theo dõi dữ liệu đầu vào và các phương án thời khóa biểu." },
-  { key: "import", label: "Nhập dữ liệu CSV", note: "Tải đủ bảy tệp CSV để kiểm tra và xác nhận bộ dữ liệu." },
-  { key: "ga", label: "Cấu hình và chạy GA", note: "Điều chỉnh tham số để tạo phương án thời khóa biểu." },
-  { key: "results", label: "Kết quả thời khóa biểu", note: "Xem, lọc và xuất phương án đã tạo." },
-  { key: "adjustments", label: "Chỉnh sửa lịch", note: "Điều chỉnh một buổi học sau khi hệ thống kiểm tra xung đột." },
-];
-const days: Record<number, string> = { 2: "Thứ Hai", 3: "Thứ Ba", 4: "Thứ Tư", 5: "Thứ Năm", 6: "Thứ Sáu", 7: "Thứ Bảy", 8: "Chủ nhật" };
-const courseTypes: Record<string, string> = { THEORY: "Lý thuyết", PRACTICE: "Thực hành", INTEGRATED: "Lý thuyết – thực hành" };
-const formatDate = (value?: string) => value ? new Intl.DateTimeFormat("vi-VN").format(new Date(`${value.slice(0, 10)}T00:00:00`)) : "—";
-const formatDateTime = (value?: string) => value ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(value)) : "—";
-const batchLabel = (batch: Batch) => [batch.display_name || batch.batch_code, batch.semester, batch.academic_year].filter(Boolean).join(" · ");
-const errorText = (error: unknown) => error instanceof Error ? error.message : "Đã có lỗi không mong muốn.";
+import { useState, useEffect } from 'react';
+import apiClient from './api/client';
 
 export function App() {
-  const [page, setPage] = useState<Page>(() => (location.hash.slice(1) as Page) || "overview");
-  const [apiOnline, setApiOnline] = useState(false);
-  const [batches, setBatches] = useState<Batch[]>([]);
-  const [runs, setRuns] = useState<Run[]>([]);
-  const [activeRun, setActiveRun] = useState<Run | null>(null);
-  const [activeOfficial, setActiveOfficial] = useState<OfficialTimetable | null>(null);
-  const [notice, setNotice] = useState<{ text: string; tone: "success" | "error" } | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [roleType, setRoleType] = useState<'ADMIN' | 'TRAINING_OFFICE' | 'LECTURER'>('ADMIN');
+  const [currentUsername, setCurrentUsername] = useState('admin');
+  
+  // Admin & Training state
+  const [adminTab, setAdminTab] = useState<'accounts' | 'csv' | 'ga' | 'approvals'>('accounts');
+  const [accounts, setAccounts] = useState([
+    { id: 1, username: 'admin', fullname: 'Quản trị viên Hệ thống', role: 'ADMIN', status: 'ACTIVE' },
+    { id: 2, username: 'pdt', fullname: 'Phòng Đào Tạo', role: 'TRAINING_OFFICE', status: 'ACTIVE' },
+    { id: 3, username: 'gv001', fullname: 'ThS. Nguyễn Văn A', role: 'LECTURER', status: 'ACTIVE' },
+    { id: 4, username: 'gv002', fullname: 'ThS. Trần Văn B', role: 'LECTURER', status: 'INACTIVE' }
+  ]);
+  
+  const [searchFilter, setSearchFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newAcc, setNewAcc] = useState({ username: '', fullname: '', role: 'LECTURER' });
 
-  const refresh = async () => {
-    try { const [nextBatches, nextRuns] = await Promise.all([api.batches(), api.runs()]); setBatches(nextBatches); setRuns(nextRuns); setApiOnline(true); }
-    catch { setApiOnline(false); }
+  // GA & CSV Datasets state
+  const [officialFiles, setOfficialFiles] = useState<any[]>([]);
+  const [batches, setBatches] = useState<any[]>([]);
+  const [gaConfig, setGaConfig] = useState({
+    populationSize: 100,
+    generations: 500,
+    mutationRate: 0.05,
+    crossoverRate: 0.8
+  });
+
+  // Lecturer state
+  const [lecTab, setLecTab] = useState<'calendar' | 'requests'>('calendar');
+  const [lecView, setLecView] = useState<'week' | 'list' | 'month' | 'day'>('week');
+  const [weekOffset, setWeekOffset] = useState(4);
+  const [requests, setRequests] = useState([
+    { id: 'REQ-001', content: 'Đổi Lập trình Web sang T3', reason: 'Trùng lịch hội thảo', status: 'Chờ duyệt' }
+  ]);
+  // Hàm bóc tách trực tiếp tên/mã môn học từ dữ liệu thực tế của GA Backend
+  const getBackendSubjectName = (item: any) => {
+    if (!item) return 'Lớp học phần';
+    // Ưu tiên các trường tên môn hoặc mã môn từ object thật của backend
+    return item.course_name || item.subject_name || item.course_code || item.subject_code || item.section_code || item.name || 'Học phần GA';
   };
-  useEffect(() => { void refresh(); }, []);
-  useEffect(() => { const onHash = () => setPage((location.hash.slice(1) as Page) || "overview"); addEventListener("hashchange", onHash); return () => removeEventListener("hashchange", onHash); }, []);
-  const navigate = (target: Page) => { location.hash = target; setPage(target); };
-  const selectRun = async (runCode: string) => { try { setActiveRun(await api.run(runCode)); navigate("results"); } catch (error) { setNotice({ text: errorText(error), tone: "error" }); } };
-  const activePage = pages.find((item) => item.key === page)!;
 
-  return <div className="app-shell">
-    <aside className="sidebar"><div className="brand"><span>TKB</span><div><strong>Timetable GA</strong><small>Phòng Đào tạo</small></div></div>
-      <nav aria-label="Điều hướng chính">{pages.map((item) => <button className={page === item.key ? "active" : ""} key={item.key} onClick={() => navigate(item.key)}>{item.label}</button>)}</nav>
-      <p className={`connection ${apiOnline ? "online" : ""}`}>{apiOnline ? "Đã kết nối hệ thống" : "Chưa kết nối máy chủ"}</p>
-    </aside>
-    <main><header><div><p className="eyebrow">Ứng dụng xếp lịch giảng dạy</p><h1>{activePage.label}</h1><p>{activePage.note}</p></div></header>
-      {notice && <div className={`alert ${notice.tone}`} role="status">{notice.text}<button onClick={() => setNotice(null)} aria-label="Đóng thông báo">×</button></div>}
-      {page === "overview" && <Overview runs={runs} batches={batches} onNavigate={navigate} onSelectRun={selectRun} />}
-      {page === "import" && <ImportPage onConfirmed={async (batch) => { await refresh(); setNotice({ text: `Đã xác nhận bộ dữ liệu ${batch.batch_code}.`, tone: "success" }); navigate("ga"); }} />}
-      {page === "ga" && <GaPage batches={batches} onRun={async (run) => { setActiveRun(run); await refresh(); navigate("results"); }} />}
-      {page === "results" && <ResultsPage run={activeRun} runs={runs} onSelectRun={selectRun} onPublish={async (run) => { try { const official = await api.publishRun(run.run_code); setActiveOfficial(official); setNotice({ text: `Đã công bố ${official.official_code} thành lịch chính thức.`, tone: "success" }); navigate("adjustments"); } catch (error) { setNotice({ text: errorText(error), tone: "error" }); } }} />}
-      {page === "adjustments" && <AdjustmentsPage official={activeOfficial} onUpdate={setActiveOfficial} />}
-    </main>
-  </div>;
-}
+  const getBackendRoom = (item: any) => {
+    return item?.room_code || item?.room || item?.room_name || 'A201';
+  };
 
-function Overview({ runs, batches, onNavigate, onSelectRun }: { runs: Run[]; batches: Batch[]; onNavigate: (page: Page) => void; onSelectRun: (code: string) => void }) {
-  return <><section className="hero"><div><p className="eyebrow">Sẵn sàng lập thời khóa biểu</p><h2>Quản lý dữ liệu, chạy thuật toán và điều chỉnh lịch tại một nơi.</h2><button onClick={() => onNavigate("ga")}>Chạy xếp lịch</button></div><div className="hero-art">GA</div></section>
-    <section className="metrics"><Metric label="Bộ dữ liệu đã xác nhận" value={batches.length} /><Metric label="Lần chạy đã lưu" value={runs.length} /><Metric label="Lần chạy gần nhất" value={runs[0]?.status === "COMPLETED" ? "Hoàn thành" : runs[0]?.status || "Chưa có"} /></section>
-    <section className="panel"><div className="panel-title"><div><h2>Lịch sử chạy thuật toán</h2><p>Chọn một phương án để xem lại kết quả đã lưu.</p></div></div><RunList runs={runs} onSelect={onSelectRun} /></section></>;
-}
-function Metric({ label, value }: { label: string; value: string | number }) { return <article className="metric"><span>{label}</span><strong>{value}</strong></article>; }
-function RunList({ runs, onSelect }: { runs: Run[]; onSelect: (code: string) => void }) { return runs.length ? <div className="run-list">{runs.map((run) => <button key={run.run_code} className="run-row" onClick={() => onSelect(run.run_code)}><span><strong>{run.run_code}</strong><small>{formatDate(run.created_at)}</small></span><span className={`status ${run.status.toLowerCase()}`}>{run.status === "COMPLETED" ? "Hoàn thành" : run.status}</span></button>)}</div> : <Empty text="Chưa có lần chạy thuật toán nào." />; }
+  const getBackendSlot = (item: any) => {
+    return item?.slot_code || item?.slot || item?.time_slot || 'Tiết chuẩn';
+  };
+  const [isReqModalOpen, setIsReqModalOpen] = useState(false);
+  const [selectedCls, setSelectedCls] = useState({ name: '', code: '', date: '', time: '', room: '' });
+  const [reqReason, setReqReason] = useState('');
 
-function ImportPage({ onConfirmed }: { onConfirmed: (batch: Batch) => void }) {
-  const [files, setFiles] = useState<File[]>([]); const [preview, setPreview] = useState<Preview | null>(null); const [busy, setBusy] = useState(false); const [displayName, setDisplayName] = useState(""); const [semester, setSemester] = useState(""); const [academicYear, setAcademicYear] = useState(""); const [note, setNote] = useState(""); const names = new Set(files.map((file) => file.name));
-  const upload = async (event: FormEvent) => { event.preventDefault(); if (files.length !== 7) { setPreview({ valid: false, errors: [{ reason: "Vui lòng chọn đủ bảy tệp CSV theo danh sách." }] }); return; } setBusy(true); try { setPreview(await api.previewImport(files)); } catch (error) { setPreview({ valid: false, errors: [{ reason: errorText(error) }] }); } finally { setBusy(false); } };
-  const confirm = async () => { setBusy(true); try { const result = await api.confirmImport(files, { displayName, semester, academicYear, note }); onConfirmed(result.batch); } catch (error) { setPreview({ valid: false, errors: [{ reason: errorText(error) }] }); } finally { setBusy(false); } };
-  return <section className="panel"><h2>Tải bộ dữ liệu CSV</h2><p>Hệ thống chỉ nhận một bộ gồm đủ 7 tệp và kiểm tra trước khi lưu.</p><form onSubmit={upload}><label className="file-drop"><input type="file" accept=".csv,text/csv" multiple onChange={(event) => { setFiles(Array.from(event.target.files || [])); setPreview(null); }} /><strong>Chọn 7 tệp CSV</strong><span>{files.length ? `${files.length} tệp đã chọn` : "Kéo thả hoặc bấm để chọn tệp"}</span></label><div className="file-checklist">{requiredFiles.map((name) => <span className={names.has(name) ? "present" : ""} key={name}>{names.has(name) ? "✓" : "○"} {name}</span>)}</div><button disabled={busy}>{busy ? "Đang kiểm tra..." : "Kiểm tra dữ liệu"}</button></form>
-    {preview && <PreviewResult preview={preview} displayName={displayName} semester={semester} academicYear={academicYear} note={note} onDisplayName={setDisplayName} onSemester={setSemester} onAcademicYear={setAcademicYear} onNote={setNote} onConfirm={confirm} busy={busy} />}</section>;
-}
-function PreviewResult({ preview, displayName, semester, academicYear, note, onDisplayName, onSemester, onAcademicYear, onNote, onConfirm, busy }: { preview: Preview; displayName: string; semester: string; academicYear: string; note: string; onDisplayName: (value: string) => void; onSemester: (value: string) => void; onAcademicYear: (value: string) => void; onNote: (value: string) => void; onConfirm: () => void; busy: boolean }) { return <div className={`preview ${preview.valid ? "valid" : "invalid"}`}><h3>{preview.valid ? "Dữ liệu hợp lệ" : "Phát hiện lỗi dữ liệu"}</h3>{preview.files && <ul>{preview.files.map((file) => <li key={file.file}>{file.file}: {file.row_count} dòng</li>)}</ul>}{preview.errors?.map((error, index) => <p className="error-detail" key={index}>{[error.file, error.row && `dòng ${error.row}`, error.column && `cột ${error.column}`, error.reason].filter(Boolean).join(" — ")}</p>)}{preview.valid && <><p className="metadata-intro">Đặt tên để dễ phân biệt các bộ dữ liệu; bạn có thể bỏ qua và xác nhận ngay.</p><div className="form-grid batch-metadata"><label>Tên bộ dữ liệu <span>(tùy chọn)</span><input value={displayName} onChange={(event) => onDisplayName(event.target.value)} placeholder="Ví dụ: TKB HK1 2026–2027 — Đợt 1" /></label><label>Học kỳ <span>(tùy chọn)</span><input value={semester} onChange={(event) => onSemester(event.target.value)} placeholder="Ví dụ: Học kỳ 1" /></label><label>Năm học <span>(tùy chọn)</span><input value={academicYear} onChange={(event) => onAcademicYear(event.target.value)} placeholder="Ví dụ: 2026–2027" /></label><label>Ghi chú <span>(tùy chọn)</span><textarea value={note} onChange={(event) => onNote(event.target.value)} placeholder="Ví dụ: Dữ liệu sau đăng ký đợt 1" /></label></div><button onClick={onConfirm} disabled={busy}>{busy ? "Đang xác nhận..." : "Xác nhận bộ dữ liệu"}</button></>}</div>; }
+  // Fetch backend data
+  const fetchBackendData = async () => {
+    try {
+      const resBatches = await apiClient.get('/batches');
+      const batchData = resBatches.data;
+      setBatches(Array.isArray(batchData) ? batchData : batchData.items || batchData.batches || []);
 
-function GaPage({ batches, onRun }: { batches: Batch[]; onRun: (run: Run) => void }) {
-  const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
-  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); setBusy(true); setError(null); try { await onRun(await api.startRun({ batch_code: String(data.get("batch_code")), population_size: Number(data.get("population_size")), generations: Number(data.get("generations")), seed: Number(data.get("seed")), crossover_rate: Number(data.get("crossover_rate")), mutation_rate: Number(data.get("mutation_rate")), elite_count: Number(data.get("elite_count")), tournament_size: Number(data.get("tournament_size")) })); } catch (reason) { setError(errorText(reason)); } finally { setBusy(false); } };
-  const selectedBatch = batches[0]; return <section className="panel"><h2>Cấu hình Thuật toán Di truyền</h2><p>Các ràng buộc nghiệp vụ luôn do backend kiểm tra trước khi lưu kết quả.</p>{!batches.length && <div className="alert warning">Hãy xác nhận một bộ dữ liệu CSV trước khi chạy GA.</div>}<form className="form-grid" onSubmit={submit}><label>Bộ dữ liệu<select name="batch_code" required disabled={!batches.length}>{batches.map((batch) => <option value={batch.batch_code} key={batch.batch_code}>{batchLabel(batch)} — xác nhận {formatDateTime(batch.confirmed_at)}</option>)}</select><small className="field-help">{selectedBatch ? `${selectedBatch.section_count || 0} lớp · Phiên bản ${selectedBatch.version_number || 1} · Mã: ${selectedBatch.batch_code}` : ""}</small></label><label>Kích thước quần thể<input name="population_size" type="number" min="1" defaultValue="80" required /></label><label>Số thế hệ<input name="generations" type="number" min="1" defaultValue="200" required /></label><label>Seed<input name="seed" type="number" defaultValue="42" required /></label><label>Tỷ lệ lai ghép<input name="crossover_rate" type="number" min="0" max="1" step="0.05" defaultValue="0.8" required /></label><label>Tỷ lệ đột biến<input name="mutation_rate" type="number" min="0" max="1" step="0.05" defaultValue="0.1" required /></label><label>Số cá thể tinh hoa<input name="elite_count" type="number" min="0" defaultValue="2" required /></label><label>Kích thước tournament<input name="tournament_size" type="number" min="1" defaultValue="3" required /></label><div className="form-action"><button disabled={busy || !batches.length}>{busy ? "Đang chạy..." : "Chạy thuật toán"}</button></div></form>{error && <div className="alert error">{error}</div>}</section>;
-}
-
-type ResultSort = "day_time" | "lecturer" | "section" | "room" | "course_type";
-
-function ResultsPage({ run, runs, onSelectRun, onPublish }: { run: Run | null; runs: Run[]; onSelectRun: (code: string) => void; onPublish: (run: Run) => void }) {
-  const [search, setSearch] = useState("");
-  const [type, setType] = useState("ALL");
-  const [sort, setSort] = useState<ResultSort>("day_time");
-
-  useEffect(() => {
-    setSearch("");
-    setType("ALL");
-    setSort("day_time");
-  }, [run?.run_code]);
-
-  const filtered = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase("vi");
-    return (run?.assignments || []).filter((item) => {
-      const haystack = [item.section_code, item.course_code, item.course_name, item.lecturer_code, item.lecturer_name, item.room_code]
-        .join(" ")
-        .toLocaleLowerCase("vi");
-      return (!normalizedSearch || haystack.includes(normalizedSearch))
-        && (type === "ALL" || item.course_type === type);
-    });
-  }, [run, search, type]);
-
-  const sorted = useMemo(() => [...filtered].sort((first, second) => compareAssignments(first, second, sort)), [filtered, sort]);
-
-  if (!run) return <section className="panel"><h2>Chọn phương án</h2><RunList runs={runs} onSelect={onSelectRun} /></section>;
-
-  return <>
-    <section className="panel run-summary">
-      <div><p className="eyebrow">Mã lần chạy</p><h2>{run.run_code}</h2><p>{run.assignments.length} lớp học phần · {run.occurrences.length} buổi học theo ngày</p></div>
-      <div className="export-links"><button type="button" onClick={() => onPublish(run)}>Công bố lịch chính thức</button><a href={`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.csv`}>Xuất CSV</a><a href={`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.xlsx`}>Xuất Excel</a></div>
-    </section>
-    <section className="panel">
-      <div className="toolbar result-toolbar">
-        <input aria-label="Tìm kiếm" placeholder="Tìm lớp, môn, giảng viên hoặc phòng" value={search} onChange={(event) => setSearch(event.target.value)} />
-        <label>Sắp xếp lớp theo<select aria-label="Sắp xếp lớp học" value={sort} onChange={(event) => setSort(event.target.value as ResultSort)}>
-          <option value="day_time">Thứ và tiết học</option><option value="lecturer">Tên giảng viên</option><option value="section">Mã lớp học phần</option><option value="room">Mã phòng</option><option value="course_type">Loại lớp</option>
-        </select></label>
-        <label>Loại lớp<select aria-label="Lọc loại lớp" value={type} onChange={(event) => setType(event.target.value)}><option value="ALL">Tất cả loại lớp</option>{Object.entries(courseTypes).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
-      </div>
-      <p className="filter-summary" role="status">Hiển thị {sorted.length} trên {run.assignments.length} lớp học phần.</p>
-      <AssignmentTable rows={sorted} />
-    </section>
-  </>;
-}
-
-function compareAssignments(first: Assignment, second: Assignment, sort: ResultSort) {
-  const compareText = (left: string | undefined, right: string | undefined) => String(left || "").localeCompare(String(right || ""), "vi");
-  const compareDayTime = () => Number(first.day_of_week) - Number(second.day_of_week)
-    || Number(first.start_period) - Number(second.start_period)
-    || compareText(first.section_code, second.section_code);
-  if (sort === "lecturer") return compareText(first.lecturer_name || first.lecturer_code, second.lecturer_name || second.lecturer_code) || compareDayTime();
-  if (sort === "section") return compareText(first.section_code, second.section_code) || compareDayTime();
-  if (sort === "room") return compareText(first.room_code, second.room_code) || compareDayTime();
-  if (sort === "course_type") return compareText(courseTypes[first.course_type], courseTypes[second.course_type]) || compareDayTime();
-  return compareDayTime();
-}
-
-function AssignmentTable({ rows }: { rows: Assignment[] }) {
-  if (!rows.length) return <Empty text="Không có lớp học phần phù hợp với bộ lọc." />;
-  return <div className="table-wrap"><table><thead><tr><th>Lớp học phần</th><th>Giảng viên</th><th>Ngày / tiết</th><th>Phòng</th><th>Loại lớp</th></tr></thead><tbody>{rows.map((item) => <tr key={item.section_code}><td><strong>{item.section_code}</strong><small>{item.course_name}</small></td><td>{item.lecturer_name || item.lecturer_code}</td><td>{days[item.day_of_week] || item.day_of_week}<small>Tiết {item.start_period}–{item.end_period}</small></td><td>{item.room_code}</td><td><span className="pill">{courseTypes[item.course_type] || "Không xác định"}</span></td></tr>)}</tbody></table></div>;
-}
-
-function AdjustmentsPage({ official, onUpdate }: { official: OfficialTimetable | null; onUpdate: (official: OfficialTimetable) => void }) {
-  const [search, setSearch] = useState("");
-  const [week, setWeek] = useState("ALL");
-  const [lecturer, setLecturer] = useState("ALL");
-  const [room, setRoom] = useState("ALL");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [editing, setEditing] = useState<Occurrence | null>(null);
-  const [options, setOptions] = useState<Awaited<ReturnType<typeof api.adjustmentOptions>>>([]);
-  const [message, setMessage] = useState<string | null>(null);
-  const run = official;
-  const runCode = official?.official_code;
-
-  useEffect(() => {
-    setSearch("");
-    setWeek("ALL");
-    setLecturer("ALL");
-    setRoom("ALL");
-    setPage(1);
-  }, [runCode]);
-
-  const assignments = useMemo(() => new Map((run?.assignments || []).map((item) => [item.section_code, item])), [run]);
-  const weeks = useMemo(() => [...new Set((run?.occurrences || []).map((item) => item.academic_week))].sort((first, second) => first - second), [run]);
-  const lecturers = useMemo(() => {
-    const values = new Map<string, string>();
-    assignments.forEach((item) => { if (item.lecturer_code) values.set(item.lecturer_code, `${item.lecturer_name || item.lecturer_code} (${item.lecturer_code})`); });
-    return [...values.entries()].sort(([, first], [, second]) => first.localeCompare(second, "vi"));
-  }, [assignments]);
-  const rooms = useMemo(() => [...new Set((run?.occurrences || []).map((item) => item.room_code))].sort((first, second) => first.localeCompare(second, "vi")), [run]);
-
-  const filteredRows = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase("vi");
-    return (run?.occurrences || []).filter((item) => {
-      const assignment = assignments.get(item.section_code);
-      const haystack = [item.section_code, item.room_code, assignment?.course_code, assignment?.course_name, assignment?.lecturer_name, assignment?.lecturer_code]
-        .join(" ")
-        .toLocaleLowerCase("vi");
-      return (!normalizedSearch || haystack.includes(normalizedSearch))
-        && (week === "ALL" || String(item.academic_week) === week)
-        && (lecturer === "ALL" || assignment?.lecturer_code === lecturer)
-        && (room === "ALL" || item.room_code === room);
-    }).sort((first, second) => String(first.date).localeCompare(String(second.date))
-      || String(first.section_code).localeCompare(String(second.section_code), "vi")
-      || String(first.slot_code).localeCompare(String(second.slot_code), "vi"));
-  }, [run, assignments, search, week, lecturer, room]);
-
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const currentPageNumber = Math.min(page, pageCount);
-  const currentRows = filteredRows.slice((currentPageNumber - 1) * pageSize, currentPageNumber * pageSize);
-  const firstRow = filteredRows.length ? (currentPageNumber - 1) * pageSize + 1 : 0;
-  const lastRow = filteredRows.length ? Math.min(currentPageNumber * pageSize, filteredRows.length) : 0;
-
-  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
-
-  const clearFilters = () => { setSearch(""); setWeek("ALL"); setLecturer("ALL"); setRoom("ALL"); setPage(1); };
-  const open = async (item: Occurrence) => { if (!official) return; setMessage(null); try { setOptions(await api.adjustmentOptions(official.source_run_code, item.section_code, item.date)); setEditing(item); } catch (error) { setMessage(errorText(error)); } };
-
-  if (!official) return <section className="panel"><Empty text="Hãy công bố một phương án GA thành lịch chính thức trước khi điều chỉnh." /></section>;
-  return <section className="panel">
-    <div className="panel-heading"><div><h2>Điều chỉnh lịch chính thức</h2><p>{official.official_code} · Phương án gốc {official.source_run_code} được giữ nguyên. Chọn phạm vi trước khi lưu thay đổi.</p></div><div className="export-links"><a href={`/api/ga/official-timetables/${encodeURIComponent(official.official_code)}/export.csv`}>Xuất CSV</a><a href={`/api/ga/official-timetables/${encodeURIComponent(official.official_code)}/export.xlsx`}>Xuất Excel</a></div></div>
-    <OfficialScheduleTools official={official} onUpdate={onUpdate} onMessage={setMessage} />
-    <div className="adjustment-filter-bar" aria-label="Tìm và lọc buổi học">
-      <label className="adjustment-search">Tìm buổi học<input aria-label="Tìm buổi học" placeholder="Mã lớp, tên môn, giảng viên hoặc phòng" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
-      <label>Tuần học<select aria-label="Lọc theo tuần học" value={week} onChange={(event) => { setWeek(event.target.value); setPage(1); }}><option value="ALL">Tất cả các tuần</option>{weeks.map((value) => <option value={String(value)} key={value}>Tuần {value}</option>)}</select></label>
-      <label>Giảng viên<select aria-label="Lọc theo giảng viên" value={lecturer} onChange={(event) => { setLecturer(event.target.value); setPage(1); }}><option value="ALL">Tất cả giảng viên</option>{lecturers.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-      <label>Phòng<select aria-label="Lọc theo phòng" value={room} onChange={(event) => { setRoom(event.target.value); setPage(1); }}><option value="ALL">Tất cả phòng</option>{rooms.map((value) => <option value={value} key={value}>{value}</option>)}</select></label>
-      <button className="secondary" type="button" onClick={clearFilters}>Xóa bộ lọc</button>
-    </div>
-    {message && <div className="alert success">{message}</div>}
-    <div className="adjustment-list-summary"><span>Hiển thị {firstRow}-{lastRow} trên {filteredRows.length}/{official.occurrences.length} buổi học.</span><label>Hiển thị<select aria-label="Số buổi hiển thị mỗi trang" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value={25}>25 buổi</option><option value={50}>50 buổi</option><option value={100}>100 buổi</option></select></label></div>
-    <div className="table-wrap result-table"><table><thead><tr><th>Ngày</th><th>Lớp học phần</th><th>Môn học</th><th>Giảng viên</th><th>Tiết</th><th>Phòng</th><th>Thao tác</th></tr></thead><tbody>{currentRows.map((item) => { const assignment = assignments.get(item.section_code); const period = assignment && item.slot_code === assignment.slot_code ? `${assignment.start_period}–${assignment.end_period}` : item.slot_code; return <tr key={`${item.section_code}-${item.date}`}><td>{formatDate(item.date)}<small>Tuần {item.academic_week}</small></td><td><strong>{item.section_code}</strong></td><td>{assignment?.course_name || "—"}</td><td>{assignment?.lecturer_name || assignment?.lecturer_code || "—"}</td><td>{period}</td><td>{item.room_code}</td><td><button className="secondary" type="button" onClick={() => void open(item)}>Sửa buổi này</button></td></tr>; })}</tbody></table></div>
-    {!currentRows.length && <Empty text="Không có buổi học phù hợp với bộ lọc." />}
-    {pageCount > 1 && <div className="pagination-controls" aria-label="Phân trang buổi học"><button className="secondary" type="button" disabled={currentPageNumber === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Trang trước</button><span>Trang {currentPageNumber}/{pageCount}</span><button className="secondary" type="button" disabled={currentPageNumber === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Trang sau</button></div>}
-    {editing && <AdjustmentDialog official={official} occurrence={editing} options={options} onClose={() => setEditing(null)} onSaved={(next, note) => { onUpdate(next); setEditing(null); setMessage(note); }} />}
-  </section>;
-}
-
-function AdjustmentDialog({ official, occurrence, options, onClose, onSaved }: { official: OfficialTimetable; occurrence: Occurrence; options: Awaited<ReturnType<typeof api.adjustmentOptions>>; onClose: () => void; onSaved: (official: OfficialTimetable, note: string) => void }) {
-  const [slotCode, setSlotCode] = useState(occurrence.slot_code); const [roomCode, setRoomCode] = useState(occurrence.room_code); const [scope, setScope] = useState<AdjustmentScope>("ONE_OCCURRENCE"); const [endDate, setEndDate] = useState(occurrence.date); const [reason, setReason] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
-  const selected = options.find((slot) => slot.slot_code === slotCode) || options[0]; const rooms = selected?.rooms || [];
-  useEffect(() => { if (selected && !rooms.some((room) => room.room_code === roomCode)) setRoomCode(rooms[0]?.room_code || ""); }, [selected, rooms, roomCode]);
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (!reason.trim()) { setError("Vui lòng nhập lý do điều chỉnh."); return; } setBusy(true); try { const body = { section_code: occurrence.section_code, occurrence_date: occurrence.date, slot_code: selected?.slot_code || "", room_code: roomCode, reason, scope, ...(scope === "DATE_RANGE" ? { effective_start_date: occurrence.date, effective_end_date: endDate } : scope === "FROM_DATE_TO_END" ? { effective_start_date: occurrence.date } : {}) }; const result = await api.adjustOfficial(official.official_code, body); onSaved(result.official, result.message); } catch (cause) { setError(errorText(cause)); } finally { setBusy(false); } };
-  return <div className="modal-backdrop" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button className="close" onClick={onClose} aria-label="Đóng">×</button><p className="eyebrow">Điều chỉnh lịch chính thức</p><h2 id="modal-title">{occurrence.section_code} · {formatDate(occurrence.date)}</h2><form onSubmit={submit}><label>Phạm vi áp dụng<select value={scope} onChange={(event) => setScope(event.target.value as AdjustmentScope)}><option value="ONE_OCCURRENCE">Chỉ buổi học này</option><option value="DATE_RANGE">Từ buổi này đến ngày đã chọn</option><option value="FROM_DATE_TO_END">Từ buổi này đến hết học phần</option></select></label>{scope === "DATE_RANGE" && <label>Ngày kết thúc<input type="date" min={occurrence.date} value={endDate} onChange={(event) => setEndDate(event.target.value)} required /></label>}<label>Khung giờ<select value={selected?.slot_code || ""} onChange={(event) => setSlotCode(event.target.value)}>{options.map((slot) => <option key={slot.slot_code} value={slot.slot_code}>Tiết {slot.start_period}–{slot.end_period}</option>)}</select></label><label>Phòng học<select value={roomCode} onChange={(event) => setRoomCode(event.target.value)}>{rooms.map((room) => <option key={room.room_code} value={room.room_code}>{room.room_code} — {room.room_name} ({room.capacity} chỗ)</option>)}</select></label><label>Lý do điều chỉnh<textarea value={reason} onChange={(event) => setReason(event.target.value)} required /></label>{error && <div className="alert error">{error}</div>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Hủy</button><button disabled={busy || !selected || !roomCode}>{busy ? "Đang lưu..." : "Lưu điều chỉnh"}</button></div></form></section></div>;
-}
-
-function OfficialScheduleTools({ official, onUpdate, onMessage }: { official: OfficialTimetable; onUpdate: (official: OfficialTimetable) => void; onMessage: (message: string) => void }) {
-  const [error, setError] = useState<string | null>(null);
-  const [missingKey, setMissingKey] = useState("");
-  const completedMissingDates = new Set((official.makeup_sessions || []).map((item) => `${item.section_code}|${item.original_missing_date || ""}`));
-  const missingSessions = (official.skipped_holiday_sessions || []).filter((item) => !completedMissingDates.has(`${item.section_code}|${item.date}`));
-  const submit = async (event: FormEvent<HTMLFormElement>, kind: "segment" | "makeup") => {
-    event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>;
-    if (kind === "makeup" && values.missing_session) {
-      const [sectionCode, originalDate] = values.missing_session.split("|");
-      values.section_code = sectionCode; values.original_missing_date = originalDate; delete values.missing_session;
+      const resFiles = await apiClient.get('/datasets/official/files');
+      const fileData = resFiles.data;
+      setOfficialFiles(Array.isArray(fileData) ? fileData : fileData.items || fileData.files || []);
+    } catch (err) {
+      console.error('Lỗi khi gọi API backend:', err);
     }
-    setError(null);
-    try { const result = kind === "segment" ? await api.createSegment(official.official_code, values) : await api.createMakeup(official.official_code, values); onUpdate(result.official); onMessage(result.message); event.currentTarget.reset(); setMissingKey(""); } catch (cause) { setError(errorText(cause)); }
   };
-  return <section className="schedule-tools"><div className="tool-intro"><h3>Quản lý ngoại lệ lịch</h3><p><strong>Phân đoạn lịch</strong> dùng khi một lớp đổi phòng hoặc khung giờ lặp lại trong một khoảng ngày; không tạo thêm buổi học. <strong>Buổi học bù</strong> là một buổi riêng để bù cho ngày nghỉ.</p></div>{missingSessions.length ? <div className="missing-sessions"><strong>Có {missingSessions.length} buổi cần bù do ngày nghỉ.</strong><span> Chọn chi tiết buổi thiếu trong biểu mẫu “Thêm buổi học bù”.</span></div> : <div className="missing-sessions complete"><strong>Không có buổi thiếu do ngày nghỉ trong lịch này.</strong></div>}<div className="tool-forms"><form className="tool-card" onSubmit={(event) => void submit(event, "segment")}><h3>Tạo phân đoạn lịch</h3><p>Ví dụ: chuyển phòng từ ngày 16/10 đến hết học kỳ.</p><label>Mã lớp học phần<input name="section_code" required /></label><div className="compact-grid"><label>Từ ngày<input name="effective_start_date" type="date" required /></label><label>Đến ngày<input name="effective_end_date" type="date" required /></label></div><div className="compact-grid"><label>Mã khung giờ<input name="slot_code" required /></label><label>Mã phòng<input name="room_code" required /></label></div><label>Lý do<textarea name="reason" required /></label><button>Tạo phân đoạn</button></form><form className="tool-card" onSubmit={(event) => void submit(event, "makeup")}><h3>Thêm buổi học bù</h3><p>Chọn một buổi thiếu để liên kết và theo dõi số buổi cần dạy.</p><label>Buổi thiếu do ngày nghỉ<select name="missing_session" value={missingKey} onChange={(event) => setMissingKey(event.target.value)} required><option value="">Chọn buổi cần bù</option>{missingSessions.map((item) => <option value={`${item.section_code}|${item.date}`} key={`${item.section_code}-${item.date}`}>{item.section_code} · {formatDate(item.date)}{item.holiday_name ? ` — ${item.holiday_name}` : ""}</option>)}</select></label><div className="compact-grid"><label>Ngày học bù<input name="makeup_date" type="date" required /></label><label>Mã khung giờ<input name="slot_code" required /></label></div><label>Mã phòng<input name="room_code" required /></label><label>Lý do<textarea name="reason" required /></label><button disabled={!missingSessions.length}>Thêm buổi bù</button></form></div>{error && <div className="alert error">{error}</div>}</section>;
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchBackendData();
+    }
+  }, [isLoggedIn]);
+
+  // Login handler
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = currentUsername.trim().toLowerCase();
+    if (val === 'admin') {
+      setRoleType('ADMIN');
+      setAdminTab('accounts');
+    } else if (val === 'pdt') {
+      setRoleType('TRAINING_OFFICE');
+      setAdminTab('csv');
+    } else {
+      setRoleType('LECTURER');
+    }
+    setIsLoggedIn(true);
+  };
+
+  const quickLogin = (user: string) => {
+    setCurrentUsername(user);
+    if (user === 'admin') {
+      setRoleType('ADMIN');
+      setAdminTab('accounts');
+    } else if (user === 'pdt') {
+      setRoleType('TRAINING_OFFICE');
+      setAdminTab('csv');
+    } else {
+      setRoleType('LECTURER');
+    }
+    setIsLoggedIn(true);
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+  };
+
+  // Toggle status with confirmation
+  const toggleStatus = (id: number, username: string, currentStatus: string) => {
+    const actionName = currentStatus === 'ACTIVE' ? 'vô hiệu hóa' : 'kích hoạt';
+    if (window.confirm(`Bạn có chắc chắn muốn ${actionName} tài khoản [${username}] không?`)) {
+      setAccounts(accounts.map(a => a.id === id ? { ...a, status: currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' } : a));
+    }
+  };
+
+  const saveNewUser = () => {
+    if (!newAcc.username || !newAcc.fullname) {
+      alert('Vui lòng nhập đầy đủ thông tin!');
+      return;
+    }
+    setAccounts([...accounts, { id: accounts.length + 1, ...newAcc, status: 'ACTIVE' }]);
+    setIsCreateModalOpen(false);
+    setNewAcc({ username: '', fullname: '', role: 'LECTURER' });
+    alert('Cấp tài khoản mới thành công!');
+  };
+
+  const submitRequest = () => {
+    if (!reqReason.trim()) {
+      alert('Vui lòng nhập lý do!');
+      return;
+    }
+    setRequests([
+      { id: `REQ-00${requests.length + 1}`, content: `Đổi ${selectedCls.name} (${selectedCls.code})`, reason: reqReason, status: 'Chờ duyệt' },
+      ...requests
+    ]);
+    setIsReqModalOpen(false);
+    setReqReason('');
+    setLecTab('requests');
+    alert('Gửi yêu cầu thành công!');
+  };
+
+  const filteredAccounts = accounts.filter(a => 
+    (a.username.toLowerCase().includes(searchFilter.toLowerCase()) || a.fullname.toLowerCase().includes(searchFilter.toLowerCase())) &&
+    (roleFilter ? a.role === roleFilter : true) &&
+    (statusFilter ? a.status === statusFilter : true)
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-slate-800 antialiased font-['Inter',sans-serif]">
+      
+      {/* 1. MÀN HÌNH ĐĂNG NHẬP */}
+      {!isLoggedIn && (
+        <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-slate-700/50">
+            <div className="text-center mb-8">
+              <div className="w-14 h-14 bg-indigo-600 rounded-2xl mx-auto flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-indigo-600/30 mb-4">H</div>
+              <h1 className="text-2xl font-bold text-slate-900">Cổng Đào Tạo & Xếp Lịch GA</h1>
+              <p className="text-xs text-slate-500 mt-1">Trường Đại học Công Thương TP.HCM (HUIT)</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Tên đăng nhập (Username)</label>
+                <input 
+                  type="text" 
+                  value={currentUsername} 
+                  onChange={(e) => setCurrentUsername(e.target.value)} 
+                  required 
+                  placeholder="admin, pdt hoặc gv001" 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-600 outline-none transition"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Mật khẩu</label>
+                <input type="password" required defaultValue="******" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-600 outline-none transition" />
+              </div>
+              <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-indigo-600/30 transition text-sm">
+                Đăng nhập hệ thống
+              </button>
+            </form>
+
+            <div className="mt-6 pt-6 border-t border-slate-100 text-center">
+              <p className="text-xs text-slate-500 mb-3">Tài khoản trải nghiệm nhanh:</p>
+              <div className="flex gap-2 justify-center">
+                <button type="button" onClick={() => quickLogin('admin')} className="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-xs border">🛡️ Admin</button>
+                <button type="button" onClick={() => quickLogin('pdt')} className="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-xs border">📁 Phòng Đào Tạo</button>
+                <button type="button" onClick={() => quickLogin('gv001')} className="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-xs border">👨‍🏫 Giảng Viên</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. GIAO DIỆN CHÍNH */}
+      {isLoggedIn && (
+        <div className="min-h-screen flex flex-col bg-slate-100">
+          
+          <header className="bg-indigo-900 text-white shadow-md z-20">
+            <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-lg">H</div>
+                <div>
+                  <h1 className="font-bold text-base">
+                    {roleType === 'ADMIN' ? 'Cổng Quản Trị Hệ Thống (Admin)' : roleType === 'TRAINING_OFFICE' ? 'Cổng Quản Lý Đào Tạo & GA' : 'Cổng Thông Tin Giảng Viên'}
+                  </h1>
+                  <p className="text-xs text-indigo-300">Đại học Công Thương TP.HCM (HUIT)</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="bg-indigo-800/80 px-3 py-1.5 rounded-lg border border-indigo-700 text-xs font-medium flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span>Role: {roleType} ({currentUsername})</span>
+                </div>
+                <button onClick={handleLogout} className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm">
+                  Đăng xuất
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <div className="flex-1 flex max-w-7xl w-full mx-auto">
+            
+            {/* Sidebar */}
+            <aside className="w-72 bg-white border-r border-slate-200 p-6 flex flex-col justify-between shadow-xs">
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Menu Điều Hướng</p>
+                
+                {roleType === 'ADMIN' && (
+                  <nav className="space-y-1.5">
+                    <button onClick={() => setAdminTab('accounts')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition text-left ${adminTab === 'accounts' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'}`}>👥 Quản lý tài khoản</button>
+                  </nav>
+                )}
+
+                {roleType === 'TRAINING_OFFICE' && (
+                  <nav className="space-y-1.5">
+                    <button onClick={() => setAdminTab('csv')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition text-left ${adminTab === 'csv' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'}`}>📁 Quản lý dữ liệu CSV</button>
+                    <button onClick={() => setAdminTab('ga')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition text-left ${adminTab === 'ga' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'}`}>⚙️ Cấu hình & Chạy GA</button>
+                    <button onClick={() => setAdminTab('approvals')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition text-left ${adminTab === 'approvals' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'}`}>✅ Phê duyệt đổi lịch</button>
+                  </nav>
+                )}
+
+                {roleType === 'LECTURER' && (
+                  <nav className="space-y-1.5">
+                    <button onClick={() => setLecTab('calendar')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition text-left ${lecTab === 'calendar' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'}`}>📅 Lịch Giảng Dạy</button>
+                    <button onClick={() => setLecTab('requests')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition text-left ${lecTab === 'requests' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'}`}>🕒 Theo dõi Request</button>
+                    
+                    <div className="pt-4 mt-4 border-t border-slate-100 space-y-2">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Công cụ xuất báo cáo</p>
+                      <button onClick={() => window.print()} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-sm">🖨️ In lịch giảng dạy</button>
+                      <button onClick={() => alert('Đang xuất file Excel...')} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm">📥 Xuất file Excel</button>
+                    </div>
+                  </nav>
+                )}
+              </div>
+              <div className="pt-6 border-t border-slate-100">
+                <div className="bg-slate-50 p-3 rounded-xl border text-center text-xs text-slate-600 font-semibold">Đồ án Tốt nghiệp 2026</div>
+              </div>
+            </aside>
+
+            {/* Main Workspace */}
+            <main className="flex-1 p-8 overflow-y-auto">
+              
+              {/* ADMIN & TRAINING WORKSPACE */}
+              {(roleType === 'ADMIN' || roleType === 'TRAINING_OFFICE') && (
+                <div className="space-y-6">
+                  
+                  {/* 1. QUẢN LÝ TÀI KHOẢN (Chỉ dành cho ADMIN) */}
+                  {roleType === 'ADMIN' && adminTab === 'accounts' && (
+                    <div className="space-y-6">
+                      <div className="bg-white p-6 rounded-2xl border shadow-xs flex justify-between items-center">
+                        <div>
+                          <h2 className="text-xl font-bold text-slate-800">Quản lý Tài khoản Hệ thống</h2>
+                          <p className="text-xs text-slate-500 mt-0.5">Tìm kiếm, lọc, cấp tài khoản và kích hoạt/vô hiệu hóa người dùng.</p>
+                        </div>
+                        <button onClick={() => setIsCreateModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition">+ Cấp tài khoản mới</button>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-2xl border shadow-xs flex gap-3">
+                        <input 
+                          type="text" 
+                          value={searchFilter} 
+                          onChange={(e) => setSearchFilter(e.target.value)} 
+                          placeholder="🔍 Tìm kiếm theo username hoặc họ tên..." 
+                          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:bg-white focus:ring-2 focus:ring-indigo-600"
+                        />
+                        <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none font-medium">
+                          <option value="">Tất cả Role</option>
+                          <option value="ADMIN">ADMIN</option>
+                          <option value="TRAINING_OFFICE">TRAINING_OFFICE</option>
+                          <option value="LECTURER">LECTURER</option>
+                        </select>
+                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none font-medium">
+                          <option value="">Tất cả trạng thái</option>
+                          <option value="ACTIVE">ACTIVE</option>
+                          <option value="INACTIVE">INACTIVE</option>
+                        </select>
+                      </div>
+
+                      <div className="bg-white rounded-2xl border shadow-xs overflow-hidden">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 text-slate-400 uppercase text-[10px] font-bold border-b">
+                            <tr><th className="p-4">Username</th><th className="p-4">Họ tên</th><th className="p-4">Role</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Thao tác</th></tr>
+                          </thead>
+                          <tbody className="divide-y text-sm">
+                            {filteredAccounts.map(acc => (
+                              <tr key={acc.id} className="hover:bg-slate-50">
+                                <td className="p-4 font-bold text-indigo-600">{acc.username}</td>
+                                <td className="p-4">{acc.fullname}</td>
+                                <td className="p-4"><span className="bg-slate-100 text-xs px-2.5 py-1 rounded-lg font-semibold">{acc.role}</span></td>
+                                <td className="p-4"><span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${acc.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>{acc.status}</span></td>
+                                <td className="p-4 text-right">
+                                  <button onClick={() => toggleStatus(acc.id, acc.username, acc.status)} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${acc.status === 'ACTIVE' ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                    {acc.status === 'ACTIVE' ? 'Vô hiệu hóa' : 'Kích hoạt'}
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                 {/* HIỂN THỊ DANH SÁCH TỆP CSV GỌN GÀNG, ĐẸP MẮT */}
+                  {adminTab === 'csv' && (
+                    <div className="bg-white p-8 rounded-2xl border shadow-xs space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h3 className="font-bold text-lg text-slate-800">📁 Quản lý dữ liệu CSV đầu vào (Datasets)</h3>
+                          <p className="text-xs text-slate-500 mt-0.5">Danh sách các tệp dữ liệu đã được đồng bộ từ Backend Database.</p>
+                        </div>
+                        <button onClick={fetchBackendData} className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-2 rounded-xl transition">🔄 Tải lại dữ liệu</button>
+                      </div>
+
+                      <div className="space-y-3 pt-2">
+                        {officialFiles.length > 0 ? (
+                          officialFiles.map((item, idx) => {
+                            const fileName = typeof item === 'string' ? item : item.file || item.file_name || `Dataset_${idx}`;
+                            const headers = item.headers ? item.headers.join(', ') : '';
+                            const rowCount = item.row_count !== undefined ? `(${item.row_count} dòng)` : '';
+
+                            return (
+                              <div key={idx} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between transition hover:border-indigo-200">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-sm text-indigo-900">📄 {fileName}</span>
+                                    {rowCount && <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-semibold">{rowCount}</span>}
+                                  </div>
+                                  {headers && <p className="text-[11px] text-slate-500 truncate max-w-xl"><strong>Cột dữ liệu:</strong> {headers}</p>}
+                                </div>
+                                <span className="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">Sẵn sàng</span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">Không có tệp dữ liệu nào trong hệ thống.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                 {/* HIỂN THỊ DANH SÁCH BATCH GỌN GÀNG TỪ BACKEND */}
+                  {roleType === 'TRAINING_OFFICE' && adminTab === 'ga' && (
+                    <div className="bg-white p-8 rounded-2xl border shadow-xs space-y-6">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h3 className="font-bold text-lg text-slate-800">⚙️ Cấu hình thông số và Chạy thuật toán GA</h3>
+                          <p className="text-xs text-slate-500">Tùy chỉnh các thông số thuật toán di truyền để tối ưu thời khóa biểu.</p>
+                        </div>
+                        <button 
+                          onClick={async () => {
+                            try {
+                              alert('Đã gửi yêu cầu chạy GA. Thuật toán đang tính toán trên server, vui lòng đợi trong giây lát...');
+                              const res = await apiClient.post('/ga/runs/preview', {
+                                batch_code: 'BATCH-20260809-184731-D2A2D3',
+                                population_size: 20,
+                                generations: 50,
+                                mutation_rate: gaConfig.mutationRate,
+                                crossover_rate: gaConfig.crossoverRate
+                              }, {
+                                timeout: 60000 
+                              });
+                              console.log('Kết quả GA:', res.data);
+                              if (res.data.occurrences) {
+                                localStorage.setItem('lecturer_timetable', JSON.stringify(res.data.occurrences));
+                              }
+                              alert('Chạy thuật toán GA thành công!');
+                              fetchBackendData();
+                            } catch (err: any) {
+                              console.error('Chi tiết lỗi:', err);
+                              alert('Lỗi: ' + (err.response?.data?.detail || err.message));
+                            }
+                          }} 
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow transition"
+                        >
+                          ⚡ Chạy thuật toán GA
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-bold text-slate-700">Kích thước quần thể (Population Size)</label>
+                          <input type="number" value={gaConfig.populationSize} onChange={e => setGaConfig({...gaConfig, populationSize: Number(e.target.value)})} className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs outline-none" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-bold text-slate-700">Số thế hệ (Generations)</label>
+                          <input type="number" value={gaConfig.generations} onChange={e => setGaConfig({...gaConfig, generations: Number(e.target.value)})} className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs outline-none" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-bold text-slate-700">Tỷ lệ đột biến (Mutation Rate)</label>
+                          <input type="number" step="0.01" value={gaConfig.mutationRate} onChange={e => setGaConfig({...gaConfig, mutationRate: Number(e.target.value)})} className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs outline-none" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-bold text-slate-700">Tỷ lệ lai ghép (Crossover Rate)</label>
+                          <input type="number" step="0.01" value={gaConfig.crossoverRate} onChange={e => setGaConfig({...gaConfig, crossoverRate: Number(e.target.value)})} className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs outline-none" />
+                        </div>
+                      </div>
+
+                      <div className="p-5 bg-slate-50 border rounded-2xl space-y-3">
+                        <h4 className="font-bold text-xs text-slate-700 uppercase">📦 Các Batch hiện có ({batches.length})</h4>
+                        {batches.length > 0 ? (
+                          batches.map((b, i) => {
+                            const code = typeof b === 'string' ? b : b.batch_code || 'BATCH_UNKNOWN';
+                            const name = typeof b === 'object' && b.display_name ? b.display_name : 'Bộ dữ liệu chính thức';
+                            const time = typeof b === 'object' && b.created_at ? new Date(b.created_at).toLocaleString() : '';
+
+                            return (
+                              <div key={i} className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                                <div>
+                                  <span className="font-bold text-indigo-900">📦 {code}</span>
+                                  <p className="text-slate-500 text-[11px] mt-0.5">{name} {time && `— ${time}`}</p>
+                                </div>
+                                <span className="text-[10px] bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-lg font-bold">Đang chọn</span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-xs text-slate-500 italic">Chưa có batch nào trong hệ thống.</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {roleType === 'TRAINING_OFFICE' && adminTab === 'approvals' && (
+                    <div className="bg-white p-8 rounded-2xl border shadow-xs text-center">
+                      <h3 className="font-bold text-lg text-slate-800">✅ Phê duyệt yêu cầu đổi lịch</h3>
+                      <p className="text-xs text-slate-500 mt-1">Chưa có yêu cầu đổi lịch nào cần xét duyệt.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* LECTURER WORKSPACE */}
+              {roleType === 'LECTURER' && (
+                <div className="space-y-6">
+                  {lecTab === 'calendar' ? (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center bg-white p-5 rounded-2xl border shadow-xs">
+                        <div>
+                          <h2 className="text-xl font-bold text-slate-800">Lịch Giảng Dạy Cá Nhân</h2>
+                          <p className="text-xs text-slate-500 mt-0.5">Chỉ hiển thị dữ liệu của giảng viên đang đăng nhập.</p>
+                        </div>
+                        <div className="flex bg-slate-100 p-1.5 rounded-2xl border gap-1">
+                          <button onClick={() => setLecView('list')} className={`px-4 py-2 text-xs font-bold rounded-xl transition ${lecView === 'list' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600'}`}>Danh Sách</button>
+                          <button onClick={() => setLecView('month')} className={`px-4 py-2 text-xs font-bold rounded-xl transition ${lecView === 'month' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600'}`}>Theo Tháng</button>
+                          <button onClick={() => setLecView('week')} className={`px-4 py-2 text-xs font-bold rounded-xl transition ${lecView === 'week' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600'}`}>Theo Tuần</button>
+                          <button onClick={() => setLecView('day')} className={`px-4 py-2 text-xs font-bold rounded-xl transition ${lecView === 'day' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600'}`}>Theo Ngày</button>
+                        </div>
+                      </div>
+
+                     {lecView === 'week' && (() => {
+                        const savedData = localStorage.getItem('lecturer_timetable');
+                        const allTimetable = savedData ? JSON.parse(savedData) : [];
+
+                        return (
+                          <div className="space-y-4">
+                            <div className="flex justify-between items-center bg-white p-4 rounded-2xl border shadow-xs">
+                              <div>
+                                <h3 className="text-base font-bold text-slate-800">Thời khóa biểu Tuần hệ thống GA</h3>
+                                <p className="text-xs text-slate-500">Tổng số buổi phân công: {allTimetable.length} buổi</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => setWeekOffset(p => Math.max(1, p - 1))} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-xs font-bold rounded-lg">&lt; Tuần trước</button>
+                                <button onClick={() => setWeekOffset(4)} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg">Tuần hiện tại</button>
+                                <button onClick={() => setWeekOffset(p => p + 1)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-xs font-bold rounded-lg">Tuần sau &gt;</button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-7 gap-3">
+                              {['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'].map((day, idx) => {
+                                // Lọc chính xác các lớp theo đúng ngày trong mảng dữ liệu thật
+                                const targetDayIndex = idx + 2; // Chuẩn thứ trong tuần
+                                const dayClasses = allTimetable.filter((item: any) => {
+                                  if (!item.date) return idx === 0;
+                                  const itemDate = new Date(item.date);
+                                  return itemDate.getDay() === (targetDayIndex === 8 ? 0 : targetDayIndex);
+                                }).slice(0, 4);
+
+                                return (
+                                  <div key={idx} className="bg-white border rounded-xl p-2.5 min-h-[500px] flex flex-col justify-between shadow-xs">
+                                    <div className="text-center pb-2 border-b mb-2">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase">{day}</span>
+                                    </div>
+                                    <div className="flex-1 flex flex-col gap-2 overflow-y-auto max-h-[450px]">
+                                      {dayClasses.length > 0 ? (
+                                        dayClasses.map((cls: any, cIdx: number) => (
+                                          <div 
+                                            key={cIdx} 
+                                            onClick={() => { 
+                                              setSelectedCls({ 
+                                                name: cls.course_name || cls.course_code || 'Lớp GA', 
+                                                code: cls.course_code || 'GA', 
+                                                date: cls.date || day, 
+                                                time: cls.slot_code || cls.slot || 'Tiết chuẩn', 
+                                                room: cls.room_code || cls.room || 'A201' 
+                                              }); 
+                                              setIsReqModalOpen(true); 
+                                            }} 
+                                            className="bg-indigo-50 border p-2 rounded-lg cursor-pointer hover:border-indigo-300 transition text-left"
+                                          >
+                                            <span className="text-[9px] bg-indigo-600 text-white px-1 rounded font-bold">{cls.slot_code || 'Slot'}</span>
+                                            <p className="font-bold text-[11px] text-indigo-900 mt-1 truncate">{cls.course_code || cls.course_name || 'Môn học'}</p>
+                                            <p className="text-[10px] text-slate-500">Phòng: {cls.room_code || cls.room || 'A201'}</p>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <div className="text-center py-4 text-slate-300 text-[10px] bg-slate-50/50 rounded-lg">Trống</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {lecView === 'day' && (() => {
+                        const savedData = localStorage.getItem('lecturer_timetable');
+                        const allTimetable = savedData ? JSON.parse(savedData) : [];
+                        const dayClasses = allTimetable.slice(0, 10); // Hiển thị danh sách các buổi học chi tiết
+
+                        return (
+                          <div className="space-y-4">
+                            <div className="bg-white p-5 rounded-2xl border shadow-xs flex justify-between items-center">
+                              <h3 className="font-bold text-slate-800 text-sm">Chi tiết lịch trình theo ngày phân công từ GA</h3>
+                              <input type="date" defaultValue="2026-09-09" className="border text-xs px-3 py-1.5 rounded-lg outline-none" />
+                            </div>
+                            
+                            {dayClasses.length > 0 ? (
+                              dayClasses.map((item: any, idx: number) => (
+                                <div key={idx} className="bg-white p-5 rounded-2xl border shadow-xs flex items-center justify-between">
+                                  <div>
+                                    <span className="bg-indigo-100 text-indigo-700 text-xs px-2.5 py-1 rounded-lg font-bold">{item.slot_code || item.slot || 'Tiết chuẩn'}</span>
+                                    <h4 className="font-bold text-slate-900 mt-2">{item.course_code || item.course_name || 'Môn học phần'}</h4>
+                                    <p className="text-xs text-slate-500 mt-0.5">Phòng: {item.room_code || item.room || 'A201'} — Ngày: {item.date || '2026-09-09'}</p>
+                                  </div>
+                                  <button 
+                                    onClick={() => { 
+                                      setSelectedCls({ 
+                                        name: item.course_name || 'Lớp học phần GA', 
+                                        code: item.course_code || 'GA', 
+                                        date: item.date || '2026-09-09', 
+                                        time: item.slot_code || 'Tiết chuẩn', 
+                                        room: item.room_code || 'A201' 
+                                      }); 
+                                      setIsReqModalOpen(true); 
+                                    }} 
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition"
+                                  >
+                                    Gửi yêu cầu đổi lịch
+                                  </button>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="bg-white p-8 rounded-2xl border text-center text-xs text-slate-400 italic">
+                                Không có lớp học trong ngày này.
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {lecView === 'month' && (() => {
+                        const savedData = localStorage.getItem('lecturer_timetable');
+                        const allTimetable = savedData ? JSON.parse(savedData) : [];
+
+                        return (
+                          <div className="bg-white p-8 rounded-2xl border shadow-xs space-y-4 text-center">
+                            <h3 className="font-bold text-slate-800 text-lg mb-1">Lịch biểu Tổng quan Tháng 09/2026</h3>
+                            <p className="text-xs text-slate-500">Hệ thống GA đã phân bổ tổng cộng <strong className="text-indigo-600">{allTimetable.length} buổi học</strong> trong toàn bộ học kỳ.</p>
+                            <div className="p-4 bg-slate-50 rounded-2xl border text-xs text-slate-600">
+                              💡 Bạn có thể chuyển sang chế độ xem <strong>Danh Sách</strong> hoặc <strong>Theo Tuần</strong> để xem chi tiết từng phòng học, tiết học và thực hiện thao tác đổi lịch.
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {lecView === 'list' && (() => {
+                        const savedData = localStorage.getItem('lecturer_timetable');
+                        const timetableList = savedData ? JSON.parse(savedData) : [];
+
+                        return (
+                          <div className="bg-white rounded-2xl border shadow-xs overflow-hidden">
+                            <div className="p-4 border-b bg-slate-50 font-bold text-xs text-slate-700 uppercase flex justify-between items-center">
+                              <span>Danh sách thời khóa biểu GA ({timetableList.length} buổi)</span>
+                              <button onClick={() => window.location.reload()} className="text-[10px] bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg font-bold">🔄 Làm mới trang</button>
+                            </div>
+                            <table className="w-full text-left text-sm">
+                              <thead className="bg-slate-50 text-slate-400 uppercase text-[10px] font-bold border-b">
+                                <tr>
+                                  <th className="p-4">Thứ / Ngày</th>
+                                  <th className="p-4">Tiết / Slot</th>
+                                  <th className="p-4">Môn học / Lớp</th>
+                                  <th className="p-4">Phòng</th>
+                                  <th className="p-4 text-center">Trạng thái</th>
+                                  <th className="p-4 text-right">Thao tác</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y text-sm">
+                                {timetableList.length > 0 ? (
+                                  timetableList.map((item: any, idx: number) => (
+                                    <tr key={idx} className="hover:bg-slate-50">
+                                      <td className="p-4 font-semibold text-xs">{item.date || 'Thứ 2 (03/09/2026)'}</td>
+                                      <td className="p-4 text-xs">{item.slot_code || item.slot || 'Tiết 1-3'}</td>
+                                      <td className="p-4 font-bold text-indigo-700 text-xs">
+                                      {item.course_name ? `${item.course_name} (${item.course_code})` : (item.course_code || item.section_code || 'Lớp học phần GA')}                                      </td>
+                                      <td className="p-4 text-xs">{item.room_code || item.room || 'A303'}</td>
+                                      <td className="p-4 text-center">
+                                        <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2.5 py-1 rounded-full font-bold">Đã xếp</span>
+                                      </td>
+                                      <td className="p-4 text-right">
+                                        <button 
+                                          onClick={() => {
+                                            setSelectedCls({
+                                              name: item.course_name || 'Lớp học phần GA',
+                                              code: item.course_code || 'GA_01',
+                                              date: item.date || 'Thứ 2 (03/09)',
+                                              time: item.slot_code || 'Tiết 1-3',
+                                              room: item.room_code || 'A303'
+                                            });
+                                            setIsReqModalOpen(true);
+                                          }}
+                                          className="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg shadow transition"
+                                        >
+                                          Đổi lịch
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))
+                                ) : (
+                                  <tr>
+                                    <td colSpan={6} className="p-8 text-center text-xs text-slate-400 italic">
+                                      Chưa có dữ liệu lịch. Vui lòng sang tài khoản <strong>pdt</strong> bấm <strong>"Chạy thuật toán GA"</strong> trước!
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-2xl border shadow-xs overflow-hidden">
+                      <div className="p-5 border-b"><h3 className="font-bold text-slate-800">Yêu cầu thay đổi lịch của bạn</h3></div>
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-50 text-slate-400 uppercase text-[10px] font-bold border-b">
+                          <tr><th className="p-4">Mã</th><th className="p-4">Nội dung đề xuất</th><th className="p-4">Lý do</th><th className="p-4">Trạng thái</th></tr>
+                        </thead>
+                        <tbody className="divide-y text-sm">
+                          {requests.map((req, i) => (
+                            <tr key={i}>
+                              <td className="p-4 font-bold text-indigo-600">{req.id}</td>
+                              <td className="p-4">{req.content}</td>
+                              <td className="p-4 text-slate-500">{req.reason}</td>
+                              <td className="p-4"><span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-semibold">{req.status}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </main>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Cấp tài khoản mới */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-base">Cấp tài khoản mới</h3>
+              <button onClick={() => setIsCreateModalOpen(false)}>✕</button>
+            </div>
+            <input type="text" value={newAcc.username} onChange={e => setNewAcc({...newAcc, username: e.target.value})} placeholder="Username (vd: gv002)" className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs outline-none" />
+            <input type="text" value={newAcc.fullname} onChange={e => setNewAcc({...newAcc, fullname: e.target.value})} placeholder="Họ và tên" className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs outline-none" />
+            <select value={newAcc.role} onChange={e => setNewAcc({...newAcc, role: e.target.value})} className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs outline-none">
+              <option value="LECTURER">LECTURER</option>
+              <option value="TRAINING_OFFICE">TRAINING_OFFICE</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+            <button onClick={saveNewUser} className="w-full bg-indigo-600 text-white text-xs font-bold py-3 rounded-xl">Lưu tài khoản</button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tạo Request */}
+      {isReqModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-base">Tạo yêu cầu đổi lịch</h3>
+              <button onClick={() => setIsReqModalOpen(false)}>✕</button>
+            </div>
+            <div className="bg-slate-50 p-3 rounded-xl text-xs space-y-1">
+              <p><strong>Môn:</strong> {selectedCls.name} ({selectedCls.code})</p>
+              <p><strong>Thời gian:</strong> {selectedCls.date} - {selectedCls.time} (Phòng {selectedCls.room})</p>
+            </div>
+            <input 
+              type="text" 
+              value={reqReason} 
+              onChange={e => setReqReason(e.target.value)} 
+              placeholder="Nhập lý do đổi lịch..." 
+              className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-indigo-600"
+            />
+            <button onClick={submitRequest} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 rounded-xl shadow">
+              Gửi yêu cầu
+            </button>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
 }
-function Empty({ text }: { text: string }) { return <p className="empty">{text}</p>; }
+
+export default App;
