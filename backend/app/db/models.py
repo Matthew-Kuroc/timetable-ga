@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from sqlalchemy import Enum as SQLEnum
 from backend.app.db.base import Base
 
 
@@ -510,3 +510,20 @@ class ScheduleOccurrenceModel(Base):
     course_section: Mapped[CourseSectionModel] = relationship()
     room: Mapped[RoomModel] = relationship()
     time_slot: Mapped[TimeSlotModel] = relationship()
+import enum
+
+class UserRole(str, enum.Enum):
+    ADMIN = "ADMIN"
+    TRAINING_OFFICE = "TRAINING_OFFICE"
+    LECTURER = "LECTURER"
+
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    lecturer_code: Mapped[str | None] = mapped_column(String(50))
