@@ -37,7 +37,7 @@ export function PortalLayout({ user, navigation, currentPath, onNavigate, onLogo
     finally { setLoggingOut(false); }
   };
 
-  return <div className="app-shell">
+  return <div className={`app-shell role-${user.role.toLowerCase()}`}>
     <aside className="sidebar">
       <div className="brand"><span>TKB</span><div><strong>Timetable GA</strong><small>{roleLabels[user.role]}</small></div></div>
       <nav aria-label="Điều hướng chính">{navigation.map((item) => <button className={currentPath === item.path ? "active" : ""} key={item.path} onClick={() => onNavigate(item.path)}>{item.label}</button>)}</nav>

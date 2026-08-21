@@ -39,6 +39,37 @@ form { margin-top: 18px; } label { display: grid; gap: 6px; color: #334862; font
   .adjustment-list-summary label { justify-content: space-between; }
 }
 
+/* Lecturer portal typography: use the same familiar system face throughout the
+   timetable instead of the decorative heading fallback used by older screens. */
+.app-shell.role-lecturer,
+.app-shell.role-lecturer button,
+.app-shell.role-lecturer input,
+.app-shell.role-lecturer select,
+.app-shell.role-lecturer textarea {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+.app-shell.role-lecturer h1,
+.app-shell.role-lecturer h2,
+.app-shell.role-lecturer h3,
+.app-shell.role-lecturer .wt-week-badge,
+.app-shell.role-lecturer .wt-week-range,
+.app-shell.role-lecturer .cs-title {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: -0.018em;
+}
+.app-shell.role-lecturer .wt-day-name,
+.app-shell.role-lecturer .wt-day-date,
+.app-shell.role-lecturer .wt-slot-label,
+.app-shell.role-lecturer .sc-name,
+.app-shell.role-lecturer .sc-code,
+.app-shell.role-lecturer .sc-meta-item,
+.app-shell.role-lecturer .cs-info-item dd {
+  letter-spacing: 0;
+}
+.app-shell.role-lecturer .sc-name { font-size: .88rem; line-height: 1.35; }
+.app-shell.role-lecturer .sc-code,
+.app-shell.role-lecturer .sc-meta-item { font-size: .79rem; }
+
 .hero-art { transform: none; }
 .alert.success { color: #16644c; background: #edfaf4; border: 1px solid #bde8d4; }
 .batch-metadata { margin: 18px 0; padding-top: 18px; border-top: 1px solid #cbe7d8; }
