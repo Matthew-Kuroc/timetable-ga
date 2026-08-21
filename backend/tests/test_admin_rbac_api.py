@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -9,6 +11,43 @@ from backend.app.db.session import get_session_local
 from backend.app.domain.auth import UserRole
 from backend.app.main import create_app
 from backend.tests.auth_helpers import TEST_PASSWORD, authenticated_client
+from backend.app.services import runtime_store
+
+
+def test_admin_lecturer_catalog_and_account_binding_use_confirmed_batch(tmp_path, monkeypatch) -> None:
+    source = tmp_path / "source"
+    shutil.copytree("data/samples/small", source)
+    runtime_root = tmp_path / "runtime"
+    monkeypatch.setattr(runtime_store, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setattr(runtime_store, "BATCH_ROOT", runtime_root / "batches")
+    monkeypatch.setattr(runtime_store, "RUN_ROOT", runtime_root / "runs")
+    batch = runtime_store.create_confirmed_batch(source)
+
+    admin = authenticated_client(UserRole.ADMIN, username="admin_catalog")
+    catalog = admin.get("/api/admin/lecturers")
+    assert catalog.status_code == 200
+    assert catalog.json()["batch_code"] == batch["batch_code"]
+    assert catalog.json()["batch_display_name"] == batch["display_name"]
+    assert {item["lecturer_code"] for item in catalog.json()["lecturers"]} >= {"GV001"}
+
+    invalid = admin.post(
+        "/api/admin/users",
+        json={
+            "username": "gv.invalid.catalog",
+            "display_name": "Giảng viên sai mã",
+            "password": TEST_PASSWORD,
+            "role": "LECTURER",
+            "lecturer_code": "GV999",
+        },
+    )
+    assert invalid.status_code == 422
+    first = admin.post("/api/admin/users", json={"username": "gv001.account", "display_name": "Giảng viên GV001", "password": TEST_PASSWORD, "role": "LECTURER", "lecturer_code": "GV001"})
+    second = admin.post("/api/admin/users", json={"username": "gv002.account", "display_name": "Giảng viên GV002", "password": TEST_PASSWORD, "role": "LECTURER", "lecturer_code": "GV002"})
+    assert first.status_code == 201
+    assert second.status_code == 201
+    duplicate_code = admin.post("/api/admin/users", json={"username": "gv001.duplicate", "display_name": "Giảng viên trùng mã", "password": TEST_PASSWORD, "role": "LECTURER", "lecturer_code": "GV001"})
+    assert duplicate_code.status_code == 409
+    assert "không tồn tại" in invalid.json()["detail"]
 
 
 def test_role_matrix_is_enforced_by_backend() -> None:
@@ -47,7 +86,7 @@ def test_admin_can_manage_accounts_and_audit_without_exposing_passwords() -> Non
             "display_name": "Giảng viên mới",
             "password": raw_password,
             "role": "LECTURER",
-            "lecturer_code": "GV099",
+            "lecturer_code": "GV001",
         },
     )
     assert created.status_code == 201
@@ -92,3 +131,35 @@ def test_admin_can_manage_accounts_and_audit_without_exposing_passwords() -> Non
         assert created_log is not None
         assert created_log.actor_username == "admin_users"
 
+
+def test_admin_and_training_office_roles_are_singletons() -> None:
+    admin = authenticated_client(UserRole.ADMIN, username="admin_singleton")
+    duplicate_admin = admin.post(
+        "/api/admin/users",
+        json={"username": "admin.second", "display_name": "Admin 2", "password": TEST_PASSWORD, "role": "ADMIN"},
+    )
+    first_office = admin.post(
+        "/api/admin/users",
+        json={"username": "office.first", "display_name": "Phòng Đào tạo 1", "password": TEST_PASSWORD, "role": "TRAINING_OFFICE"},
+    )
+    duplicate_office = admin.post(
+        "/api/admin/users",
+        json={"username": "office.second", "display_name": "Phòng Đào tạo 2", "password": TEST_PASSWORD, "role": "TRAINING_OFFICE"},
+    )
+    assert duplicate_admin.status_code == 409
+    assert first_office.status_code == 201
+    assert duplicate_office.status_code == 409
+
+
+def test_system_admin_account_cannot_be_edited_or_disabled() -> None:
+    admin = authenticated_client(UserRole.ADMIN, username="admin_protected")
+    with get_session_local()() as session:
+        user = session.scalar(select(AppUserModel).where(AppUserModel.username == "admin_protected"))
+        assert user is not None
+        user.system_account = True
+        session.commit()
+        user_id = user.id
+
+    response = admin.patch(f"/api/admin/users/{user_id}", json={"active": False, "display_name": "Tên mới"})
+    assert response.status_code == 422
+    assert "cố định" in response.json()["detail"]

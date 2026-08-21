@@ -18,6 +18,7 @@ class AppUserModel(Base):
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(String(30), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    system_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     lecturer_code: Mapped[str | None] = mapped_column(String(50), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

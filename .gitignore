@@ -223,6 +223,13 @@ data/runtime/
 frontend/node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
+frontend/test-results/
+
+# Local-only progress artifacts (do not publish to GitHub)
+build_week*_report.py
+docs/reports/*.docx
+docs/reports/*.md
+docs/reports/*.md
 
 # Streamlit
 .streamlit/secrets.toml

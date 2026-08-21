@@ -80,6 +80,7 @@ def user_payload(user: AppUserModel, *, include_timestamps: bool = False) -> dic
         "display_name": user.display_name,
         "role": user.role,
         "active": user.active,
+        "system_account": user.system_account,
         "lecturer_code": user.lecturer_code,
     }
     if include_timestamps:

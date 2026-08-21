@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { PortalLayout, roleLabel } from "../../layouts/PortalLayout";
-import type { AdminUser, AuditLog, AuthUser, UserRole, UserWriteInput } from "../../types";
+import type { AdminUser, AuditLog, AuthUser, LecturerOption, UserRole, UserWriteInput } from "../../types";
 
 interface AdminPortalProps {
   user: AuthUser;
@@ -46,6 +46,9 @@ function AccountsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [lecturerOptions, setLecturerOptions] = useState<LecturerOption[]>([]);
+  const [lecturerBatchCode, setLecturerBatchCode] = useState<string | null>(null);
+  const [lecturerBatchName, setLecturerBatchName] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,13 +65,24 @@ function AccountsPage() {
   }, [search, role, active, offset]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void api.adminLecturers().then((result) => {
+      setLecturerOptions(result.lecturers);
+      setLecturerBatchCode(result.batch_code);
+      setLecturerBatchName(result.batch_display_name);
+    }).catch(() => {
+      setLecturerOptions([]);
+      setLecturerBatchCode(null);
+      setLecturerBatchName(null);
+    });
+  }, []);
   const page = Math.floor(offset / pageSize) + 1;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   return <>
     <section className="panel">
       <div className="panel-heading"><div><h2>Danh sách tài khoản</h2><p>Chỉ tài khoản đang hoạt động mới có thể tạo phiên đăng nhập.</p></div><button type="button" onClick={() => setShowCreate((value) => !value)}>{showCreate ? "Đóng biểu mẫu" : "Tạo tài khoản"}</button></div>
-      {showCreate && <UserForm mode="create" onCancel={() => setShowCreate(false)} onSaved={async (saved) => { setShowCreate(false); setNotice(`Đã tạo tài khoản ${saved.username}.`); setOffset(0); await load(); }} />}
+      {showCreate && <UserForm mode="create" lecturerOptions={lecturerOptions} lecturerBatchCode={lecturerBatchCode} lecturerBatchName={lecturerBatchName} onCancel={() => setShowCreate(false)} onSaved={async (saved) => { setShowCreate(false); setNotice(`Đã tạo tài khoản ${saved.username}.`); setOffset(0); await load(); }} />}
       <form className="account-filters" onSubmit={(event) => { event.preventDefault(); setOffset(0); setSearch(searchDraft.trim()); }}>
         <label>Tìm tài khoản<input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Tên đăng nhập hoặc họ tên" /></label>
         <label>Vai trò<select value={role} onChange={(event) => { setRole(event.target.value as "" | UserRole); setOffset(0); }}><option value="">Tất cả vai trò</option><option value="ADMIN">Quản trị viên</option><option value="TRAINING_OFFICE">Phòng Đào tạo</option><option value="LECTURER">Giảng viên</option></select></label>
@@ -78,21 +92,24 @@ function AccountsPage() {
       </form>
       {notice && <div className="alert success" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice(null)} aria-label="Đóng thông báo">×</button></div>}
       {error && <div className="alert error" role="alert"><span>{error}</span><button type="button" className="secondary" onClick={() => void load()}>Thử lại</button></div>}
-      {loading ? <p className="empty" role="status">Đang tải danh sách tài khoản...</p> : users.length ? <div className="table-wrap"><table><thead><tr><th>Tài khoản</th><th>Vai trò</th><th>Mã giảng viên</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th>Thao tác</th></tr></thead><tbody>{users.map((item) => <tr key={item.id}><td><strong>{item.display_name}</strong><small>{item.username}</small></td><td>{roleLabel(item.role)}</td><td>{item.lecturer_code || "—"}</td><td><span className={`status ${item.active ? "completed" : "failed"}`}>{item.active ? "Đang hoạt động" : "Đã vô hiệu hóa"}</span></td><td>{formatDateTime(item.last_login_at)}</td><td><button type="button" className="secondary" onClick={() => setEditing(item)}>Chỉnh sửa</button></td></tr>)}</tbody></table></div> : !error && <p className="empty">Không có tài khoản phù hợp với bộ lọc.</p>}
+      {loading ? <p className="empty" role="status">Đang tải danh sách tài khoản...</p> : users.length ? <div className="table-wrap"><table><thead><tr><th>Tài khoản</th><th>Vai trò</th><th>Mã giảng viên</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th>Thao tác</th></tr></thead><tbody>{users.map((item) => <tr key={item.id}><td><strong>{item.display_name}</strong><small>{item.username}</small></td><td>{roleLabel(item.role)}{item.system_account && <small>Tài khoản hệ thống</small>}</td><td>{item.lecturer_code || "—"}</td><td><span className={`status ${item.active ? "completed" : "failed"}`}>{item.active ? "Đang hoạt động" : "Đã vô hiệu hóa"}</span></td><td>{formatDateTime(item.last_login_at)}</td><td>{item.system_account ? <span className="field-help">Cố định</span> : <button type="button" className="secondary" onClick={() => setEditing(item)}>Chỉnh sửa</button>}</td></tr>)}</tbody></table></div> : !error && <p className="empty">Không có tài khoản phù hợp với bộ lọc.</p>}
       {total > pageSize && <div className="pagination-controls"><button type="button" className="secondary" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Trang trước</button><span>Trang {page}/{pageCount} · {total} tài khoản</span><button type="button" className="secondary" disabled={offset + pageSize >= total} onClick={() => setOffset(offset + pageSize)}>Trang sau</button></div>}
     </section>
-    {editing && <div className="modal-backdrop" role="presentation"><section className="modal account-modal" role="dialog" aria-modal="true" aria-labelledby="edit-account-title"><button className="close" type="button" onClick={() => setEditing(null)} aria-label="Đóng">×</button><h2 id="edit-account-title">Chỉnh sửa tài khoản</h2><UserForm mode="edit" user={editing} onCancel={() => setEditing(null)} onSaved={async (saved) => { setEditing(null); setNotice(`Đã cập nhật tài khoản ${saved.username}.`); await load(); }} /></section></div>}
+    {editing && <div className="modal-backdrop" role="presentation"><section className="modal account-modal" role="dialog" aria-modal="true" aria-labelledby="edit-account-title"><button className="close" type="button" onClick={() => setEditing(null)} aria-label="Đóng">×</button><h2 id="edit-account-title">Chỉnh sửa tài khoản</h2><UserForm mode="edit" user={editing} lecturerOptions={lecturerOptions} lecturerBatchCode={lecturerBatchCode} lecturerBatchName={lecturerBatchName} onCancel={() => setEditing(null)} onSaved={async (saved) => { setEditing(null); setNotice(`Đã cập nhật tài khoản ${saved.username}.`); await load(); }} /></section></div>}
   </>;
 }
 
 interface UserFormProps {
   mode: "create" | "edit";
   user?: AdminUser;
+  lecturerOptions: LecturerOption[];
+  lecturerBatchCode: string | null;
+  lecturerBatchName: string | null;
   onCancel: () => void;
   onSaved: (user: AdminUser) => void | Promise<void>;
 }
 
-function UserForm({ mode, user, onCancel, onSaved }: UserFormProps) {
+function UserForm({ mode, user, lecturerOptions, lecturerBatchCode, lecturerBatchName, onCancel, onSaved }: UserFormProps) {
   const [username, setUsername] = useState(user?.username || "");
   const [displayName, setDisplayName] = useState(user?.display_name || "");
   const [password, setPassword] = useState("");
@@ -101,6 +118,11 @@ function UserForm({ mode, user, onCancel, onSaved }: UserFormProps) {
   const [active, setActive] = useState(user?.active ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (role !== "LECTURER" || !lecturerCode) return;
+    const selected = lecturerOptions.find((item) => item.lecturer_code === lecturerCode);
+    if (selected) setDisplayName(selected.lecturer_name);
+  }, [role, lecturerCode, lecturerOptions]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -125,12 +147,13 @@ function UserForm({ mode, user, onCancel, onSaved }: UserFormProps) {
   };
 
   return <form className="account-form" onSubmit={submit}>
+    <button type="button" className="password-visibility" onClick={(event) => { const input = event.currentTarget.form?.querySelector<HTMLInputElement>('input[type="password"], input[data-password-visible]'); if (!input) return; input.type = input.type === "password" ? "text" : "password"; input.dataset.passwordVisible = "true"; event.currentTarget.textContent = input.type === "password" ? "Hiện mật khẩu" : "Ẩn mật khẩu"; }}>Hiện mật khẩu</button>
     <div className="form-grid">
       <label>Tên đăng nhập <span aria-hidden="true">*</span><input autoComplete="off" value={username} onChange={(event) => setUsername(event.target.value)} required /></label>
-      <label>Họ và tên <span aria-hidden="true">*</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
+      <label>Họ và tên <span aria-hidden="true">*</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} readOnly={role === "LECTURER"} required />{role === "LECTURER" && <small className="field-help">Tự động lấy từ tên giảng viên trong bộ CSV đã xác nhận.</small>}</label>
       <label>{mode === "create" ? "Mật khẩu" : "Mật khẩu mới (để trống nếu giữ nguyên)"} {mode === "create" && <span aria-hidden="true">*</span>}<input type="password" autoComplete="new-password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} required={mode === "create"} /></label>
       <label>Vai trò <span aria-hidden="true">*</span><select value={role} onChange={(event) => setRole(event.target.value as UserRole)}><option value="ADMIN">Quản trị viên</option><option value="TRAINING_OFFICE">Phòng Đào tạo</option><option value="LECTURER">Giảng viên</option></select></label>
-      {role === "LECTURER" && <label>Mã giảng viên<input value={lecturerCode} onChange={(event) => setLecturerCode(event.target.value)} placeholder="Ví dụ: GV001" /></label>}
+      {role === "LECTURER" && <label>Mã giảng viên<select value={lecturerCode} onChange={(event) => setLecturerCode(event.target.value)} required><option value="">Chọn giảng viên</option>{user?.lecturer_code && !lecturerOptions.some((item) => item.lecturer_code === user.lecturer_code) && <option value={user.lecturer_code}>{user.lecturer_code} (mã hiện tại)</option>}{lecturerOptions.map((item) => <option value={item.lecturer_code} key={item.lecturer_code}>{item.lecturer_name} ({item.lecturer_code}){item.account_username ? ` · đã có tài khoản: ${item.account_username}` : " · chưa cấp tài khoản"}</option>)}</select>{lecturerBatchCode ? <small className="field-help">Danh sách lấy từ bộ dữ liệu {lecturerBatchName || lecturerBatchCode} · mã {lecturerBatchCode} đã xác nhận. Tài khoản đã cấp được dùng lại ở các học kỳ sau.</small> : <small className="field-help">Chưa có bộ dữ liệu xác nhận; hãy nhập và xác nhận CSV trước khi cấp tài khoản giảng viên.</small>}</label>}
       {mode === "edit" && <label className="checkbox-label"><input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} /> Tài khoản đang hoạt động</label>}
     </div>
     {error && <div className="alert error" role="alert">{error}</div>}

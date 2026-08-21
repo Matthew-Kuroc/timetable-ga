@@ -3,6 +3,30 @@
 Cap nhat: 10/08/2026. Day la tai lieu ban giao ky thuat cho phien Codex sau.
 URS/SRS trong `docs/requirements/` van la nguon yeu cau nghiep vu chinh thuc.
 
+## Checkpoint Tuan 7 - 21/08/2026
+
+Tuan 7 da hoan tat nhom cong viec van hanh va trinh dien: bao ve tai khoan
+bootstrap, cap tai khoan giang vien theo `lecturer_code` on dinh, hien thi ten
+batch do Training Office dat, dat ten file export theo batch, gioi han mot
+`ADMIN` va mot `TRAINING_OFFICE`, bo sung lich giang vien theo tuan voi bo
+chon ngay/thang/nam va cot ca hoc, cung cac kiem thu workflow/API/UI.
+
+Ket qua xac minh cuoi tuan: backend `74 passed, 2 skipped`; frontend build
+thanh cong; Playwright E2E `6 passed`; benchmark fixture 120 lop khong co vi
+pham rang buoc cung. Migration PostgreSQL moi nhat la
+`20260821_0009_protect_existing_bootstrap_admin.py`.
+
+Bao cao Word tuan 7 va script tao bao cao chi giu local trong
+`docs/reports/`, khong dua vao GitHub.
+
+## Checkpoint Phien 21/08/2026
+
+Tuan 7 da dong bo cac khoang trong van hanh: tai khoan giang vien lay ma tu
+batch da xac nhan, web chi cho phep chay GA tu batch, export co bo loc va
+timestamp, co API workflow test day du, PostgreSQL smoke test trong CI va
+benchmark fixture 120 lop. Bao cao Word va script tao bao cao van chi giu o
+may local, khong thuoc pham vi theo doi cua Git.
+
 ## Checkpoint Phien 13/08/2026
 
 Trang thai: **P2.7 da hoan tat**, migration da nang cap thanh cong tren
@@ -85,12 +109,10 @@ bien moi truong; khong ghi mat khau vao ma nguon, tai lieu hay Git.
 
 ### Chua hoan thanh
 
-- Da co framework Playwright va E2E cho dang nhap, dieu huong theo role, lich
-  su/huy yeu cau, Phong Dao tao kiem tra-phe duyet-ap dung, loc/xuat ket qua,
-  hien thi ngay nghi va cong cu phan doan/buoi bu; `4 passed`.
-- Danh sach buoi thieu do ngay nghi da hien thi theo bang co tim kiem, loc
-  giang vien, phan trang va thong tin mon/lop/giang vien/ngay/tuan/ly do; form
-  buoi bu van giu kiem tra rang buoc cung o backend.
+- Chot voi nguoi huong dan cac van de dang mo trong UR/SRS: han doi toan bo
+  lich lap, quy tac hoc bu sau tam ngung, trong so mem va cau truc CSV thuc te.
+- Chuan bi kich ban demo voi PostgreSQL muc tieu va du lieu 100–200 lop sau khi
+  moi truong trien khai duoc cap credential hop le.
 
 ## Backlog Uu Tien
 
@@ -119,10 +141,10 @@ bien moi truong; khong ghi mat khau vao ma nguon, tai lieu hay Git.
 
 ### P3 - Chat luong
 
-8. Xuat theo giang vien, phong, lop hoc phan va occurrence theo ngay; ten file
-   co run code va thoi diem.
-9. Mo rong test API/UI cho adjustment scope, segment, buoi bu, phan quyen,
-   request workflow va PostgreSQL persistence; bo sung E2E cho cac form con lai.
+8. [x] Xuat theo giang vien, phong, lop hoc phan va occurrence theo ngay; ten
+   file co run code va thoi diem.
+9. [x] Mo rong test API/UI cho adjustment scope, segment, buoi bu, phan quyen,
+   request workflow va PostgreSQL persistence; bo sung E2E/API workflow.
 
 ## Doi Chieu De Tai Thuc Tap Goc
 
@@ -159,6 +181,37 @@ Khong bo cac muc nay sau khi hoan thanh cac yeu cau cot loi cua de tai.
 
 Mo rong E2E cho cac form phan doan, buoi bu va hien thi buoi thieu; sau do mo
 rong kiem thu export theo P3. Khong mo rong GA thanh mot gene cho moi occurrence.
+
+## Ke Hoach Tuan 8
+
+### Muc tieu
+
+On dinh hoa ban demo cuoi, chuan hoa du lieu va hoan tat cac luong kiem thu
+cho buoi bao ve/thuc tap ma khong mo rong pham vi sang tai khoan sinh vien,
+tu dong gan giang vien hoac tim lich theo kha nang ranh cua sinh vien.
+
+### Cong viec uu tien
+
+1. Chay rehearsal end-to-end tren PostgreSQL voi batch 100-200 lop; ghi lai
+   thoi gian chay, so vi pham cung, so occurrence va ket qua cong bo.
+2. Mo rong E2E cho tao phan doan, them buoi hoc bu, dieu chinh mot occurrence
+   va quy trinh gui/duyet/ap dung yeu cau giang vien.
+3. Hoan thien bo loc va kiem tra ten batch trong trang ket qua, trang chinh
+   sua va ten file CSV/XLSX; them test khong de mat ten khi publish.
+4. Ra soat accessibility/UI responsive tren man hinh nho, dac biet lich 7
+   ngay va form cap tai khoan.
+5. Chot cac cau hoi URS/SRS con mo voi nguoi huong dan: han khoa lich, quy tac
+   hoc bu sau tam ngung, trong so rang buoc mem va schema CSV thuc te.
+6. Tao checklist demo va huong dan khoi dong local/triển khai PostgreSQL,
+   khong ghi credential vao repository.
+
+### Tieu chi ket thuc Tuan 8
+
+- Mot kich ban demo tu upload 7 CSV den dang nhap giang vien va export chay
+  lai duoc tren PostgreSQL.
+- Backend, build frontend va E2E deu xanh; moi loi con lai duoc ghi ro trong
+  backlog.
+- URS/SRS duoc cap nhat theo cac quyet dinh da duoc nguoi huong dan xac nhan.
 
 ## Ghi Chu Luu Tru (Khong Con Phan Anh Trang Thai Hien Tai)
 
