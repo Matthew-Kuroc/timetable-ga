@@ -364,6 +364,9 @@ return an actionable message instead of inventing a deadline.
 - Training Department approval is required before applying changes.
 - Authorization must be enforced by backend APIs.
 - Only Administrator-provisioned active accounts may log in; students and outside users are not application actors.
+- The bootstrap/system Administrator account is protected: normal account management cannot edit its identity, role or active state.
+- Each Lecturer account is provisioned separately and bound to exactly one `lecturer_code` from the latest confirmed CSV batch; lecturer APIs filter by that authenticated code. Importing a lecturer row does not silently create a password or account.
+- The `lecturer_code` is the stable identity across semesters. When a later confirmed batch contains the same code, the existing account is reused; the Administrator does not create a second account for that lecturer.
 - The MVP implementation follows `FR-ADMIN-02`: each account has exactly one application role. An `ADMIN` account is separated from timetable operations and does not inherit `TRAINING_OFFICE` permissions.
 - Multi-role accounts and a password-reset workflow are not implemented in the MVP; both remain pending supervisor confirmation.
 - Administrator, Training Department and Lecturer are the proposed application roles; the permission matrix and account-lifecycle policy require supervisor confirmation.

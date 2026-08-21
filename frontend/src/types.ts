@@ -6,6 +6,7 @@ export interface AuthUser {
   display_name: string;
   role: UserRole;
   active: boolean;
+  system_account?: boolean;
   lecturer_code?: string | null;
 }
 
@@ -18,6 +19,13 @@ export interface AdminUser extends AuthUser {
   created_at?: string;
   updated_at?: string;
   last_login_at?: string | null;
+}
+
+export interface LecturerOption {
+  lecturer_code: string;
+  lecturer_name: string;
+  account_username?: string | null;
+  account_active?: boolean | null;
 }
 
 export interface UserWriteInput {

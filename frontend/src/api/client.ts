@@ -9,6 +9,7 @@ import type {
   ChangeRequestValidation,
   CreateLecturerChangeRequestInput,
   LecturerChangeRequest,
+  LecturerOption,
   LecturerChangeRequestStatus,
   LecturerTimetable,
   LoginResponse,
@@ -127,6 +128,7 @@ export const api = {
 
   adminUsers: (params: { q?: string; role?: UserRole; active?: boolean; limit?: number; offset?: number }) =>
     request<{ users: AdminUser[]; total: number }>(`/api/admin/users${query(params)}`),
+  adminLecturers: () => request<{ batch_code: string | null; batch_display_name: string | null; lecturers: LecturerOption[] }>("/api/admin/lecturers"),
   createUser: (body: { username: string; display_name: string; password: string; role: UserRole; lecturer_code?: string | null }) =>
     jsonRequest<{ user: AdminUser }>("/api/admin/users", "POST", body),
   updateUser: (userId: number, body: UserWriteInput) =>

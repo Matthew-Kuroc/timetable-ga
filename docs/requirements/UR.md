@@ -51,6 +51,8 @@ The system is needed because manual scheduling becomes time-consuming and diffic
 - Desktop web application.
 - Login and role-based access control.
 - Administrator account provisioning and user/role management; no public, student or external-user login.
+- The bootstrap Administrator identity is a protected system account and cannot be edited or deactivated through normal account management.
+- Each lecturer receives an individual provisioned account linked to a confirmed-batch lecturer code and sees only that lecturer's timetable.
 - CSV import, preview, validation and storage for teaching assignments, rooms, time slots and additional constraints.
 - Genetic Algorithm configuration and execution.
 - Hard-constraint checking and soft-constraint evaluation.

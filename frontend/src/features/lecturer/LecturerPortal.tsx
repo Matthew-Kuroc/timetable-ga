@@ -71,6 +71,10 @@ export function LecturerPortal({ user, path, onNavigate, onLogout }: LecturerPor
 }
 
 function WeeklyTimetable({ loading, data, week, onWeekChange }: { loading: boolean; data: LecturerTimetable | null; week: number; onWeekChange: (week: number) => void }) {
+  const [selectedDate, setSelectedDate] = useState("");
+  useEffect(() => {
+    if (!selectedDate && data?.occurrences?.[0]?.date) setSelectedDate(data.occurrences[0].date.slice(0, 10));
+  }, [data, selectedDate]);
   const byDay = useMemo(() => {
     const groups = new Map<number, LecturerTimetableOccurrence[]>();
     days.forEach((day) => groups.set(day.code, []));
@@ -84,13 +88,38 @@ function WeeklyTimetable({ loading, data, week, onWeekChange }: { loading: boole
       <div><h2>Tuần học {week}</h2><p>{data?.official_code ? `Lịch chính thức ${data.official_code}` : "Chưa có lịch chính thức được công bố."}</p></div>
       <div className="week-actions"><button type="button" className="secondary" disabled={week <= 1} onClick={() => onWeekChange(Math.max(1, week - 1))}>Tuần trước</button><label>Chọn tuần<input aria-label="Tuần học" type="number" min="1" max="53" value={week} onChange={(event) => onWeekChange(Math.min(53, Math.max(1, Number(event.target.value) || 1)))} /></label><button type="button" className="secondary" disabled={week >= 53} onClick={() => onWeekChange(Math.min(53, week + 1))}>Tuần sau</button></div>
     </section>
-    {loading ? <p className="empty" role="status">Đang tải lịch giảng dạy...</p> : !data?.occurrences.length ? <p className="empty">Giảng viên chưa có lịch trong tuần này.</p> : <section className="weekly-calendar" aria-label={`Lịch giảng dạy tuần ${week}`}>{days.map((day) => <article className={`calendar-day ${day.code >= 7 ? "weekend" : ""}`} key={day.code}><header><h2>{day.label}</h2><span>{byDay.get(day.code)?.length || 0} buổi</span></header><div className="calendar-sessions">{byDay.get(day.code)?.length ? byDay.get(day.code)?.map((item) => <SessionCard item={item} key={`${item.section_code}-${item.date}-${item.slot_code}`} />) : <p>Không có lịch</p>}</div></article>)}</section>}
+    <EnhancedCalendarPicker data={data} onWeekChange={onWeekChange} />
+    <section className="week-date-picker legacy-date-picker" aria-label="Chọn ngày trong lịch"><label>Chọn ngày<input aria-label="Chọn ngày" type="date" value={selectedDate} onChange={(event) => { const value = event.target.value; setSelectedDate(value); const match = data?.occurrences.find((item) => item.date.slice(0, 10) === value); onWeekChange(match?.academic_week || isoWeek(value)); }} /></label><span className="field-help">Chọn ngày để chuyển nhanh đến tuần tương ứng.</span></section>
+    {loading ? <p className="empty" role="status">Đang tải lịch giảng dạy...</p> : !data?.occurrences.length ? <p className="empty">Giảng viên chưa có lịch trong tuần này.</p> : <section className="weekly-calendar" aria-label={`Lịch giảng dạy tuần ${week}`}><article className="period-column"><header><h2>Ca học</h2></header><div>Sáng</div><div>Chiều</div><div>Tối</div></article>{days.map((day) => <article className={`calendar-day ${day.code >= 7 ? "weekend" : ""}`} key={day.code}><header><h2>{day.label}</h2><span>{byDay.get(day.code)?.length || 0} buổi</span></header><div className="calendar-sessions">{byDay.get(day.code)?.length ? byDay.get(day.code)?.map((item) => <SessionCard item={item} key={`${item.section_code}-${item.date}-${item.slot_code}`} />) : <p>Không có lịch</p>}</div></article>)}</section>}
   </>;
+}
+
+function EnhancedCalendarPicker({ data, onWeekChange }: { data: LecturerTimetable | null; onWeekChange: (week: number) => void }) {
+  const initial = data?.occurrences?.[0]?.date?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const [selected, setSelected] = useState(initial);
+  const [month, setMonth] = useState(() => new Date(`${initial}T00:00:00`));
+  const [open, setOpen] = useState(false);
+  const dates = new Set((data?.occurrences || []).map((item) => item.date.slice(0, 10)));
+  const choose = (value: string) => { setSelected(value); setOpen(false); const match = data?.occurrences.find((item) => item.date.slice(0, 10) === value); onWeekChange(match?.academic_week || isoWeek(value)); };
+  const setMonthValue = (value: string) => setMonth(new Date(month.getFullYear(), Number(value), 1));
+  const setYearValue = (value: string) => setMonth(new Date(Number(value), month.getMonth(), 1));
+  const years = Array.from({ length: 11 }, (_, index) => new Date().getFullYear() - 5 + index);
+  return <section className="compact-calendar-picker"><div className="calendar-direct-selects"><select aria-label="Chọn tháng" value={month.getMonth()} onChange={(event) => setMonthValue(event.target.value)}>{["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"].map((label, index) => <option value={index} key={label}>{label}</option>)}</select><select aria-label="Chọn năm" value={month.getFullYear()} onChange={(event) => setYearValue(event.target.value)}>{years.map((year) => <option value={year} key={year}>{year}</option>)}</select></div><button type="button" className="compact-calendar-trigger" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span className="calendar-icon">▦</span><span><small>Đang xem tuần</small><strong>{formatDate(selected)}</strong></span><span className="calendar-chevron">⌄</span></button>{open && <div className="compact-calendar-popover"><div className="compact-calendar-head"><button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>‹</button><strong>{monthLabel(month)}</strong><button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button></div><div className="compact-calendar-weekdays">{["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((day) => <span key={day}>{day}</span>)}</div><div className="compact-calendar-grid">{monthCells(month).map((cell) => <button type="button" className={`${cell.month === month.getMonth() ? "" : "muted-day"} ${cell.value === selected ? "picked-day" : ""} ${dates.has(cell.value) ? "busy-day" : ""}`} key={cell.value} onClick={() => choose(cell.value)}>{cell.day}</button>)}</div><small className="calendar-help">● Có lịch dạy trong ngày</small></div>}</section>;
+}
+
+function monthCells(value: Date) {
+  const first = new Date(value.getFullYear(), value.getMonth(), 1);
+  const offset = (first.getDay() + 6) % 7;
+  return Array.from({ length: 42 }, (_, index) => { const date = new Date(value.getFullYear(), value.getMonth(), index - offset + 1); return { value: date.toISOString().slice(0, 10), day: date.getDate(), month: date.getMonth() }; });
+}
+
+function monthLabel(value: Date) {
+  return new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric" }).format(value);
 }
 
 function SessionCard({ item }: { item: LecturerTimetableOccurrence }) {
   return <article className="session-card">
-    <div className="session-card-heading"><strong>{item.course_name || item.section_code}</strong><span className="pill">{statusLabel(item.status)}</span></div>
+    <div className="session-card-heading"><strong>{item.course_name || item.section_code}</strong>{!['SCHEDULED', 'NORMAL'].includes(item.status) && <span className={`pill ${item.status === "SUSPENDED" ? "pill-danger" : ""}`}>{statusLabel(item.status)}</span>}</div>
     <span>{item.section_code}{item.course_code ? ` · ${item.course_code}` : ""}</span>
     <dl><div><dt>Ngày</dt><dd>{formatDate(item.date)}</dd></div><div><dt>Tiết</dt><dd>{periodLabel(item)}</dd></div><div><dt>Phòng</dt><dd>{item.room_code || "Chưa xếp"}</dd></div></dl>
   </article>;
@@ -105,6 +134,14 @@ function AssignedSections({ loading, sections }: { loading: boolean; sections: L
 function dayCodeFromDate(value: string) {
   const day = new Date(`${value.slice(0, 10)}T00:00:00`).getDay();
   return day === 0 ? 8 : day + 1;
+}
+
+function isoWeek(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return 1;
+  date.setDate(date.getDate() + 4 - (date.getDay() || 7));
+  const yearStart = new Date(date.getFullYear(), 0, 1);
+  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
 function dayLabel(code: number) {

@@ -83,6 +83,12 @@ The output supports:
 - Weekly view after calendar expansion.
 - CSV/Excel export using the same base assignment or occurrence fields.
 
+Export endpoints accept optional filters: `lecturer_code`, `room_code`,
+`section_code`, `date_from` and `date_to`. Date filters apply to dated
+occurrences; assignment-only exports remain available when no occurrence
+dates exist. Generated CSV/XLSX filenames contain the run or official code and
+UTC export timestamp so downloaded files can be traced to their source.
+
 ## 6. Output Validity
 
 A timetable can be selected as valid only when:

@@ -975,14 +975,17 @@ Không đưa khóa bí mật, mật khẩu hoặc thông tin kết nối thật 
 
 ## 18. Trạng thái dự án
 
-Dự án hiện đang ở giai đoạn:
+Dự án đã hoàn thành MVP kỹ thuật chính:
 
-- Làm rõ yêu cầu nghiệp vụ.
-- Hoàn thiện URS và SRS.
-- Khởi tạo cấu trúc repository.
-- Chuẩn hóa quy trình Git và Pull Request.
-- Chuẩn bị thiết kế dữ liệu mẫu.
-- Chuẩn bị thiết kế backend, frontend và thuật toán.
+- Import và xác nhận batch 7 CSV, tạo phiên bản mới khi chỉnh sửa.
+- GA có ràng buộc cứng/mềm, seed tái lập và sinh occurrence theo lịch học kỳ.
+- Lưu PostgreSQL, công bố lịch chính thức, phân đoạn, điều chỉnh, học bù và audit.
+- Đăng nhập/phân quyền ba vai trò, quản trị tài khoản và cổng giảng viên.
+- Yêu cầu đổi lịch, kiểm tra/phê duyệt/áp dụng và export CSV/XLSX có bộ lọc.
+- CI chạy kiểm thử backend, migration PostgreSQL, frontend build và Playwright.
+
+Các quyết định nghiệp vụ còn mở vẫn được ghi trong UR/SRS draft và cần xác nhận
+trước khi mở rộng phạm vi triển khai.
 
 Các lệnh migration, bootstrap `ADMIN`, chạy backend và chạy frontend được mô
 tả tại mục 17. Chỉ sử dụng các lệnh đã tồn tại trong repository và không đưa

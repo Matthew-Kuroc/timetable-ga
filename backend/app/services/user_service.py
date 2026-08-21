@@ -11,6 +11,7 @@ from backend.app.db.models import AccountAuditModel, AppUserModel, AuthSessionMo
 from backend.app.db.session import get_session_local
 from backend.app.domain.auth import UserRole
 from backend.app.services.auth_service import normalize_username
+from backend.app.services.runtime_store import list_confirmed_lecturers
 
 
 class AccountConflictError(ValueError):
@@ -44,8 +45,10 @@ def create_user(
         role,
         lecturer_code,
     )
+    display_name = _lecturer_display_name(normalized_lecturer_code, display_name, role)
     now = datetime.now(timezone.utc)
     with get_session_local()() as session:
+        _ensure_singleton_role(session, role)
         _ensure_unique_values(session, normalized_username, normalized_lecturer_code)
         user = AppUserModel(
             username=normalized_username,
@@ -88,6 +91,8 @@ def update_user(
         user = session.get(AppUserModel, user_id)
         if user is None:
             raise AccountNotFoundError("Không tìm thấy tài khoản.")
+        if user.system_account:
+            raise AccountValidationError("Tài khoản quản trị hệ thống được cố định và không thể chỉnh sửa tại đây.")
         old_value = user_snapshot(user)
 
         username = normalize_username(str(changes.get("username", user.username)))
@@ -107,12 +112,14 @@ def update_user(
             role,
             str(lecturer_code_value) if lecturer_code_value is not None else None,
         )
+        display_name = _lecturer_display_name(lecturer_code, display_name, role)
         _ensure_unique_values(
             session,
             username,
             lecturer_code,
             excluded_user_id=user.id,
         )
+        _ensure_singleton_role(session, role, excluded_user_id=user.id)
 
         user.username = username
         user.display_name = display_name
@@ -239,6 +246,7 @@ def bootstrap_admin(*, username: str, display_name: str, password: str) -> AppUs
             legacy_admin.display_name = display_name.strip()
             legacy_admin.password_hash = _validated_password_hash(password)
             legacy_admin.active = True
+            legacy_admin.system_account = True
             legacy_admin.updated_at = now
             session.add(
                 AccountAuditModel(
@@ -259,6 +267,7 @@ def bootstrap_admin(*, username: str, display_name: str, password: str) -> AppUs
             password_hash=_validated_password_hash(password),
             role=UserRole.ADMIN.value,
             active=True,
+            system_account=True,
             created_at=now,
             updated_at=now,
         )
@@ -288,6 +297,7 @@ def user_snapshot(user: AppUserModel) -> dict[str, Any]:
         "display_name": user.display_name,
         "role": user.role,
         "active": user.active,
+        "system_account": user.system_account,
         "lecturer_code": user.lecturer_code,
     }
 
@@ -305,9 +315,32 @@ def _validate_account_values(
     normalized_lecturer_code = lecturer_code.strip() if lecturer_code else None
     if role is UserRole.LECTURER and not normalized_lecturer_code:
         raise AccountValidationError("Tài khoản giảng viên phải gắn với mã giảng viên.")
+    if role is UserRole.LECTURER and normalized_lecturer_code:
+        catalog = list_confirmed_lecturers()
+        available_codes = {
+            str(item["lecturer_code"])
+            for item in catalog.get("lecturers", [])
+            if isinstance(item, dict) and item.get("lecturer_code")
+        }
+        if available_codes and normalized_lecturer_code not in available_codes:
+            raise AccountValidationError(
+                f"Mã giảng viên {normalized_lecturer_code} không tồn tại trong bộ dữ liệu đã xác nhận."
+            )
     if role is not UserRole.LECTURER and normalized_lecturer_code:
         raise AccountValidationError("Chỉ tài khoản giảng viên mới được gắn mã giảng viên.")
     return normalized_lecturer_code
+
+
+def _lecturer_display_name(lecturer_code: str | None, display_name: str, role: UserRole) -> str:
+    """Use the confirmed CSV master name for lecturer accounts when available."""
+    cleaned = display_name.strip()
+    if role is not UserRole.LECTURER or not lecturer_code:
+        return cleaned
+    catalog = list_confirmed_lecturers()
+    for lecturer in catalog.get("lecturers", []):
+        if str(lecturer.get("lecturer_code") or "") == lecturer_code:
+            return str(lecturer.get("lecturer_name") or cleaned).strip()
+    return cleaned
 
 
 def _ensure_unique_values(
@@ -329,6 +362,17 @@ def _ensure_unique_values(
         lecturer_query = lecturer_query.where(AppUserModel.id != excluded_user_id)
     if session.scalar(lecturer_query) is not None:
         raise AccountConflictError("Mã giảng viên đã được gắn với tài khoản khác.")
+
+
+def _ensure_singleton_role(session: Any, role: UserRole, *, excluded_user_id: int | None = None) -> None:
+    if role not in {UserRole.ADMIN, UserRole.TRAINING_OFFICE}:
+        return
+    query = select(func.count(AppUserModel.id)).where(AppUserModel.role == role.value)
+    if excluded_user_id is not None:
+        query = query.where(AppUserModel.id != excluded_user_id)
+    if int(session.scalar(query) or 0) >= 1:
+        label = "ADMIN" if role is UserRole.ADMIN else "Phòng Đào tạo"
+        raise AccountConflictError(f"Hệ thống chỉ cho phép một tài khoản {label}.")
 
 
 def _audit(

@@ -70,7 +70,9 @@ def test_direct_adjustment_changes_only_one_dated_occurrence_on_official_timetab
     xlsx_response = client.get(f"/api/ga/official-timetables/{official['official_code']}/export.xlsx")
     assert xlsx_response.status_code == 200
     assert xlsx_response.headers["content-type"].startswith("application/vnd.openxmlformats")
-    assert f"{official['official_code']}.xlsx" in xlsx_response.headers["content-disposition"]
+    assert xlsx_response.headers["content-disposition"].startswith(
+        f'attachment; filename="{official["official_code"]}-'
+    )
     with zipfile.ZipFile(BytesIO(xlsx_response.content)) as workbook:
         assert "xl/worksheets/sheet1.xml" in workbook.namelist()
         assert occurrence["section_code"] in workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")

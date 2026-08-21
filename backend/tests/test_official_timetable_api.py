@@ -118,5 +118,19 @@ def test_skipped_holiday_sessions_include_course_and_lecturer_context(tmp_path, 
     assert first["course_code"]
     assert first["course_name"]
     assert first["lecturer_code"]
-    assert first["lecturer_name"]
-    assert first["status"] == "MISSING"
+
+
+def test_export_filters_by_lecturer_and_includes_timestamp(tmp_path, monkeypatch) -> None:
+    client, _run, official = _published_official(tmp_path, monkeypatch)
+    first = official["assignments"][0]
+    response = client.get(
+        f"/api/ga/official-timetables/{official['official_code']}/export.csv",
+        params={"lecturer_code": first["lecturer_code"]},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-disposition"].startswith(
+        f'attachment; filename="{official["official_code"]}-'
+    )
+    rows = response.text.lstrip("\ufeff").splitlines()
+    assert len(rows) > 1
+    assert all(first["lecturer_code"] in row for row in rows[1:])

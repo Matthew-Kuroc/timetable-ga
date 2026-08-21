@@ -22,6 +22,7 @@ def test_bootstrap_admin_prompts_for_password_and_runs_only_once(monkeypatch, ca
         user = session.scalar(select(AppUserModel).where(AppUserModel.username == "admin"))
         assert user is not None
         assert user.role == "ADMIN"
+        assert user.system_account is True
         assert verify_password("MatKhauQuanTri!123", user.password_hash)
 
     passwords = iter(["MatKhauKhac!123", "MatKhauKhac!123"])

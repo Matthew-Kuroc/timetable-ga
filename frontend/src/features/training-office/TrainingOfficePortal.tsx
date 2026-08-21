@@ -19,6 +19,12 @@ const formatDate = (value?: string) => value ? new Intl.DateTimeFormat("vi-VN").
 const formatDateTime = (value?: string) => value ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(value)) : "—";
 const batchLabel = (batch: Batch) => [batch.display_name || batch.batch_code, batch.semester, batch.academic_year].filter(Boolean).join(" · ");
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Đã có lỗi không mong muốn.";
+function exportHref(path: string, params: Record<string, string | undefined>) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => { if (value && value !== "ALL") query.set(key, value); });
+  const encoded = query.toString();
+  return encoded ? `${path}?${encoded}` : path;
+}
 
 interface TrainingOfficePortalProps {
   user: AuthUser;
@@ -104,13 +110,20 @@ type ResultSort = "day_time" | "lecturer" | "section" | "room" | "course_type";
 function ResultsPage({ run, runs, onSelectRun, onPublish }: { run: Run | null; runs: Run[]; onSelectRun: (code: string) => void; onPublish: (run: Run) => void }) {
   const [search, setSearch] = useState("");
   const [type, setType] = useState("ALL");
+  const [lecturer, setLecturer] = useState("ALL");
+  const [room, setRoom] = useState("ALL");
   const [sort, setSort] = useState<ResultSort>("day_time");
 
   useEffect(() => {
     setSearch("");
     setType("ALL");
+    setLecturer("ALL");
+    setRoom("ALL");
     setSort("day_time");
   }, [run?.run_code]);
+
+  const lecturers = useMemo(() => [...new Map((run?.assignments || []).map((item) => [item.lecturer_code, `${item.lecturer_name || item.lecturer_code} (${item.lecturer_code})`])).entries()].sort(([, first], [, second]) => first.localeCompare(second, "vi")), [run]);
+  const rooms = useMemo(() => [...new Set((run?.assignments || []).map((item) => item.room_code))].sort((first, second) => first.localeCompare(second, "vi")), [run]);
 
   const filtered = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("vi");
@@ -119,9 +132,11 @@ function ResultsPage({ run, runs, onSelectRun, onPublish }: { run: Run | null; r
         .join(" ")
         .toLocaleLowerCase("vi");
       return (!normalizedSearch || haystack.includes(normalizedSearch))
-        && (type === "ALL" || item.course_type === type);
+        && (type === "ALL" || item.course_type === type)
+        && (lecturer === "ALL" || item.lecturer_code === lecturer)
+        && (room === "ALL" || item.room_code === room);
     });
-  }, [run, search, type]);
+  }, [run, search, type, lecturer, room]);
 
   const sorted = useMemo(() => [...filtered].sort((first, second) => compareAssignments(first, second, sort)), [filtered, sort]);
 
@@ -130,7 +145,7 @@ function ResultsPage({ run, runs, onSelectRun, onPublish }: { run: Run | null; r
   return <>
     <section className="panel run-summary">
       <div><p className="eyebrow">Mã lần chạy</p><h2>{run.run_code}</h2><p>{run.assignments.length} lớp học phần · {run.occurrences.length} buổi học theo ngày</p></div>
-      <div className="export-links"><button type="button" onClick={() => onPublish(run)}>Công bố lịch chính thức</button><a href={`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.csv`}>Xuất CSV</a><a href={`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.xlsx`}>Xuất Excel</a></div>
+      <div className="export-links"><button type="button" onClick={() => onPublish(run)}>Công bố lịch chính thức</button><a href={exportHref(`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.csv`, { lecturer_code: lecturer, room_code: room })}>Xuất CSV</a><a href={exportHref(`/api/ga/runs/${encodeURIComponent(run.run_code)}/export.xlsx`, { lecturer_code: lecturer, room_code: room })}>Xuất Excel</a></div>
     </section>
     <section className="panel">
       <div className="toolbar result-toolbar">
@@ -139,6 +154,8 @@ function ResultsPage({ run, runs, onSelectRun, onPublish }: { run: Run | null; r
           <option value="day_time">Thứ và tiết học</option><option value="lecturer">Tên giảng viên</option><option value="section">Mã lớp học phần</option><option value="room">Mã phòng</option><option value="course_type">Loại lớp</option>
         </select></label>
         <label>Loại lớp<select aria-label="Lọc loại lớp" value={type} onChange={(event) => setType(event.target.value)}><option value="ALL">Tất cả loại lớp</option>{Object.entries(courseTypes).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
+        <label>Giảng viên<select aria-label="Lọc giảng viên kết quả" value={lecturer} onChange={(event) => setLecturer(event.target.value)}><option value="ALL">Tất cả giảng viên</option>{lecturers.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+        <label>Phòng<select aria-label="Lọc phòng kết quả" value={room} onChange={(event) => setRoom(event.target.value)}><option value="ALL">Tất cả phòng</option>{rooms.map((value) => <option value={value} key={value}>{value}</option>)}</select></label>
       </div>
       <p className="filter-summary" role="status">Hiển thị {sorted.length} trên {run.assignments.length} lớp học phần.</p>
       <AssignmentTable rows={sorted} />
@@ -222,7 +239,7 @@ function AdjustmentsPage({ official, onUpdate }: { official: OfficialTimetable |
 
   if (!official) return <section className="panel"><Empty text="Hãy công bố một phương án GA thành lịch chính thức trước khi điều chỉnh." /></section>;
   return <section className="panel">
-    <div className="panel-heading"><div><h2>Điều chỉnh lịch chính thức</h2><p>{official.official_code} · Phương án gốc {official.source_run_code} được giữ nguyên. Chọn phạm vi trước khi lưu thay đổi.</p></div><div className="export-links"><a href={`/api/ga/official-timetables/${encodeURIComponent(official.official_code)}/export.csv`}>Xuất CSV</a><a href={`/api/ga/official-timetables/${encodeURIComponent(official.official_code)}/export.xlsx`}>Xuất Excel</a></div></div>
+    <div className="panel-heading"><div><h2>Điều chỉnh lịch chính thức</h2><p>{official.official_code} · Phương án gốc {official.source_run_code} được giữ nguyên. Chọn phạm vi trước khi lưu thay đổi.</p></div><div className="export-links"><a href={exportHref(`/api/ga/official-timetables/${encodeURIComponent(official.official_code)}/export.csv`, { lecturer_code: lecturer, room_code: room })}>Xuất CSV</a><a href={exportHref(`/api/ga/official-timetables/${encodeURIComponent(official.official_code)}/export.xlsx`, { lecturer_code: lecturer, room_code: room })}>Xuất Excel</a></div></div>
     <OfficialScheduleTools official={official} onUpdate={onUpdate} onMessage={setMessage} />
     <div className="adjustment-filter-bar" aria-label="Tìm và lọc buổi học">
       <label className="adjustment-search">Tìm buổi học<input aria-label="Tìm buổi học" placeholder="Mã lớp, tên môn, giảng viên hoặc phòng" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
