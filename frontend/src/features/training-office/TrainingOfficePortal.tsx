@@ -1,4 +1,5 @@
-﻿import { FormEvent, useEffect, useMemo, useState } from "react";
+﻿import { PortalLayout } from "../../layouts/PortalLayout";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { TrainingRequestReviewPage } from "../lecturer-requests/TrainingRequestReviewPage";
 import type { AdjustmentScope, Assignment, AuthUser, Batch, Occurrence, OfficialTimetable, Preview, Run } from "../../types";
@@ -6,12 +7,36 @@ import type { AdjustmentScope, Assignment, AuthUser, Batch, Occurrence, Official
 type Page = "overview" | "import" | "ga" | "results" | "adjustments" | "requests";
 const requiredFiles = ["lecturers.csv", "rooms.csv", "time_slots.csv", "course_sections.csv", "lecturer_time_preferences.csv", "room_unavailable_slots.csv", "academic_calendar.csv"];
 const pages: { key: Page; label: string; note: string }[] = [
-  { key: "overview", label: "Tổng quan", note: "Theo dõi dữ liệu đầu vào và các phương án thời khóa biểu." },
-  { key: "import", label: "Nhập dữ liệu CSV", note: "Tải đủ bảy tệp CSV để kiểm tra và xác nhận bộ dữ liệu." },
-  { key: "ga", label: "Cấu hình và chạy GA", note: "Điều chỉnh tham số để tạo phương án thời khóa biểu." },
-  { key: "results", label: "Kết quả thời khóa biểu", note: "Xem, lọc và xuất phương án đã tạo." },
-  { key: "adjustments", label: "Chỉnh sửa lịch", note: "Điều chỉnh một buổi học sau khi hệ thống kiểm tra xung đột." },
-  { key: "requests", label: "Yêu cầu từ giảng viên", note: "Kiểm tra, phê duyệt, từ chối và áp dụng yêu cầu điều chỉnh lịch." },
+  {
+    key: "overview",
+    label: "Tổng quan",
+    note: "Theo dõi dữ liệu, lịch xếp và các công việc cần xử lý.",
+  },
+  {
+    key: "import",
+    label: "Dữ liệu đầu vào",
+    note: "Tải lên, kiểm tra và xác nhận dữ liệu phục vụ xếp thời khóa biểu.",
+  },
+  {
+    key: "ga",
+    label: "Cấu hình & chạy GA",
+    note: "Thiết lập tham số Genetic Algorithm và thực hiện xếp lịch.",
+  },
+  {
+    key: "results",
+    label: "Kết quả thời khóa biểu",
+    note: "Xem, lọc và công bố phương án thời khóa biểu.",
+  },
+  {
+    key: "adjustments",
+    label: "Điều chỉnh lịch",
+    note: "Điều chỉnh lịch chính thức và kiểm tra xung đột trước khi áp dụng.",
+  },
+  {
+    key: "requests",
+    label: "Yêu cầu giảng viên",
+    note: "Xem xét, phê duyệt hoặc từ chối yêu cầu điều chỉnh lịch.",
+  },
 ];
 const days: Record<number, string> = { 2: "Thứ Hai", 3: "Thứ Ba", 4: "Thứ Tư", 5: "Thứ Năm", 6: "Thứ Sáu", 7: "Thứ Bảy", 8: "Chủ nhật" };
 const courseTypes: Record<string, string> = { THEORY: "Lý thuyết", PRACTICE: "Thực hành", INTEGRATED: "Lý thuyết – thực hành" };
@@ -51,37 +76,192 @@ export function TrainingOfficePortal({ user, path, onNavigate, onLogout }: Train
   };
   useEffect(() => { void refresh(); }, []);
   const navigate = (target: Page) => onNavigate(pagePaths[target]);
-  const logout = async () => {
-    try { await onLogout(); }
-    catch (error) { setNotice({ text: errorText(error), tone: "error" }); }
-  };
+  
   const selectRun = async (runCode: string) => { try { setActiveRun(await api.run(runCode)); navigate("results"); } catch (error) { setNotice({ text: errorText(error), tone: "error" }); } };
   const activePage = pages.find((item) => item.key === page)!;
+ const navigation = pages.map((item) => ({
+  path: pagePaths[item.key],
+  label: item.label,
+}));
 
-  return <div className="app-shell">
-    <aside className="sidebar"><div className="brand"><span>TKB</span><div><strong>Timetable GA</strong><small>Phòng Đào tạo</small></div></div>
-      <nav aria-label="Điều hướng chính">{pages.map((item) => <button className={page === item.key ? "active" : ""} key={item.key} onClick={() => navigate(item.key)}>{item.label}</button>)}</nav>
-      <div className="sidebar-user"><strong>{user.display_name}</strong><span>{user.username}</span><button type="button" className="sidebar-logout" onClick={() => void logout()}>Đăng xuất</button></div>
-      <p className={`connection ${apiOnline ? "online" : ""}`}>{apiOnline ? "Đã kết nối hệ thống" : "Chưa kết nối máy chủ"}</p>
-    </aside>
-    <main><header><div><p className="eyebrow">Ứng dụng xếp lịch giảng dạy</p><h1>{activePage.label}</h1><p>{activePage.note}</p></div></header>
-      {notice && <div className={`alert ${notice.tone}`} role="status">{notice.text}<button onClick={() => setNotice(null)} aria-label="Đóng thông báo">×</button></div>}
-      {page === "overview" && <Overview runs={runs} batches={batches} onNavigate={navigate} onSelectRun={selectRun} />}
-      {page === "import" && <ImportPage onConfirmed={async (batch) => { await refresh(); setNotice({ text: `Đã xác nhận bộ dữ liệu ${batch.batch_code}.`, tone: "success" }); navigate("ga"); }} />}
-      {page === "ga" && <GaPage batches={batches} onRun={async (run) => { setActiveRun(run); await refresh(); navigate("results"); }} />}
-      {page === "results" && <ResultsPage run={activeRun} runs={runs} onSelectRun={selectRun} onPublish={async (run) => { try { const official = await api.publishRun(run.run_code); setActiveOfficial(official); setNotice({ text: `Đã công bố ${official.official_code} thành lịch chính thức.`, tone: "success" }); navigate("adjustments"); } catch (error) { setNotice({ text: errorText(error), tone: "error" }); } }} />}
-      {page === "adjustments" && <AdjustmentsPage official={activeOfficial} onUpdate={setActiveOfficial} />}
-      {page === "requests" && <TrainingRequestReviewPage onOfficialUpdated={setActiveOfficial} />}
-    </main>
-  </div>;
+return (
+  <PortalLayout
+    user={user}
+    navigation={navigation}
+    currentPath={path}
+    onNavigate={onNavigate}
+    onLogout={onLogout}
+    eyebrow="Cổng Phòng Đào tạo"
+    title={activePage.label}
+    description={activePage.note}
+  >
+    {notice && (
+      <div
+        className={`alert ${notice.tone}`}
+        role="status"
+      >
+        {notice.text}
+
+        <button
+          type="button"
+          onClick={() => setNotice(null)}
+          aria-label="Đóng thông báo"
+        >
+          ×
+        </button>
+      </div>
+    )}
+
+    {page === "overview" && (
+      <Overview
+        runs={runs}
+        batches={batches}
+        onNavigate={navigate}
+        onSelectRun={selectRun}
+      />
+    )}
+
+    {page === "import" && (
+      <ImportPage
+        onConfirmed={async (batch) => {
+          await refresh();
+
+          setNotice({
+            text: `Đã xác nhận bộ dữ liệu ${batch.batch_code}.`,
+            tone: "success",
+          });
+
+          navigate("ga");
+        }}
+      />
+    )}
+
+    {page === "ga" && (
+      <GaPage
+        batches={batches}
+        onRun={async (run) => {
+          setActiveRun(run);
+          await refresh();
+          navigate("results");
+        }}
+      />
+    )}
+
+    {page === "results" && (
+      <ResultsPage
+        run={activeRun}
+        runs={runs}
+        onSelectRun={selectRun}
+        onPublish={async (run) => {
+          try {
+            const official =
+              await api.publishRun(run.run_code);
+
+            setActiveOfficial(official);
+
+            setNotice({
+              text: `Đã công bố ${official.official_code} thành lịch chính thức.`,
+              tone: "success",
+            });
+
+            navigate("adjustments");
+          } catch (error) {
+            setNotice({
+              text: errorText(error),
+              tone: "error",
+            });
+          }
+        }}
+      />
+    )}
+
+    {page === "adjustments" && (
+      <AdjustmentsPage
+        official={activeOfficial}
+        onUpdate={setActiveOfficial}
+      />
+    )}
+
+    {page === "requests" && (
+      <TrainingRequestReviewPage
+        onOfficialUpdated={setActiveOfficial}
+      />
+    )}
+  </PortalLayout>
+);
 }
 
 function Overview({ runs, batches, onNavigate, onSelectRun }: { runs: Run[]; batches: Batch[]; onNavigate: (page: Page) => void; onSelectRun: (code: string) => void }) {
-  return <><section className="hero"><div><p className="eyebrow">Sẵn sàng lập thời khóa biểu</p><h2>Quản lý dữ liệu, chạy thuật toán và điều chỉnh lịch tại một nơi.</h2><button onClick={() => onNavigate("ga")}>Chạy xếp lịch</button></div><div className="hero-art">GA</div></section>
-    <section className="metrics"><Metric label="Bộ dữ liệu đã xác nhận" value={batches.length} /><Metric label="Lần chạy đã lưu" value={runs.length} /><Metric label="Lần chạy gần nhất" value={runs[0]?.status === "COMPLETED" ? "Hoàn thành" : runs[0]?.status || "Chưa có"} /></section>
-    <section className="panel"><div className="panel-title"><div><h2>Lịch sử chạy thuật toán</h2><p>Chọn một phương án để xem lại kết quả đã lưu.</p></div></div><RunList runs={runs} onSelect={onSelectRun} /></section></>;
+  return (
+  <div className="training-office-overview">
+    <section className="training-office-hero">
+      <div>
+        <p className="eyebrow">
+          Sẵn sàng lập thời khóa biểu
+        </p>
+
+        <h2>
+          Quản lý dữ liệu, chạy thuật toán
+          và điều chỉnh lịch tại một nơi.
+        </h2>
+
+        <button
+          onClick={() =>
+            onNavigate("ga")
+          }
+        >
+          Chạy xếp lịch
+        </button>
+      </div>
+
+      <div className="training-office-hero-art">
+        GA
+      </div>
+    </section>
+
+    <section className="training-office-metrics">
+      <article className="training-office-metric">
+        <span>Bộ dữ liệu đã xác nhận</span>
+        <strong>{batches.length}</strong>
+      </article>
+
+      <article className="training-office-metric">
+        <span>Lần chạy đã lưu</span>
+        <strong>{runs.length}</strong>
+      </article>
+
+      <article className="training-office-metric">
+        <span>Lần chạy gần nhất</span>
+        <strong>
+          {runs[0]?.status === "COMPLETED"
+            ? "Hoàn thành"
+            : runs[0]?.status || "Chưa có"}
+        </strong>
+      </article>
+    </section>
+
+    <section className="panel">
+      <div className="panel-title">
+        <div>
+          <h2>
+            Lịch sử chạy thuật toán
+          </h2>
+
+          <p>
+            Chọn một phương án để xem
+            lại kết quả đã lưu.
+          </p>
+        </div>
+      </div>
+
+      <RunList
+        runs={runs}
+        onSelect={onSelectRun}
+      />
+    </section>
+  </div>
+);
 }
-function Metric({ label, value }: { label: string; value: string | number }) { return <article className="metric"><span>{label}</span><strong>{value}</strong></article>; }
 function RunList({ runs, onSelect }: { runs: Run[]; onSelect: (code: string) => void }) { return runs.length ? <div className="run-list">{runs.map((run) => <button key={run.run_code} className="run-row" onClick={() => onSelect(run.run_code)}><span><strong>{run.run_code}</strong><small>{formatDate(run.created_at)}</small></span><span className={`status ${run.status.toLowerCase()}`}>{run.status === "COMPLETED" ? "Hoàn thành" : run.status}</span></button>)}</div> : <Empty text="Chưa có lần chạy thuật toán nào." />; }
 
 function ImportPage({ onConfirmed }: { onConfirmed: (batch: Batch) => void }) {

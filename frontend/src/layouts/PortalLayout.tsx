@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { AuthUser, UserRole } from "../types";
 
 export interface NavigationItem {
@@ -21,35 +21,177 @@ interface PortalLayoutProps {
   eyebrow: string;
   title: string;
   description: string;
-  children: React.ReactNode;
-  connection?: { online: boolean; label: string };
+  children: ReactNode;
+  connection?: {
+    online: boolean;
+    label: string;
+  };
 }
 
-export function PortalLayout({ user, navigation, currentPath, onNavigate, onLogout, eyebrow, title, description, children, connection }: PortalLayoutProps) {
+export function PortalLayout({
+  user,
+  navigation,
+  currentPath,
+  onNavigate,
+  onLogout,
+  eyebrow,
+  title,
+  description,
+  children,
+  connection,
+}: PortalLayoutProps) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
   const logout = async () => {
     setLoggingOut(true);
     setLogoutError(null);
-    try { await onLogout(); }
-    catch (cause) { setLogoutError(cause instanceof Error ? cause.message : "Không thể đăng xuất. Vui lòng thử lại."); }
-    finally { setLoggingOut(false); }
+
+    try {
+      await onLogout();
+    } catch (cause) {
+      setLogoutError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể đăng xuất."
+      );
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
-  return <div className="app-shell">
-    <aside className="sidebar">
-      <div className="brand"><span>TKB</span><div><strong>Timetable GA</strong><small>{roleLabels[user.role]}</small></div></div>
-      <nav aria-label="Điều hướng chính">{navigation.map((item) => <button className={currentPath === item.path ? "active" : ""} key={item.path} onClick={() => onNavigate(item.path)}>{item.label}</button>)}</nav>
-      <div className="sidebar-user"><strong>{user.display_name}</strong><span>{user.username}</span><button type="button" className="sidebar-logout" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? "Đang đăng xuất..." : "Đăng xuất"}</button></div>
-      {connection && <p className={`connection ${connection.online ? "online" : ""}`}>{connection.label}</p>}
-    </aside>
-    <main>
-      <header className="portal-header"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{description}</p></div><div className="user-chip"><span>{roleLabels[user.role]}</span><strong>{user.display_name}</strong></div></header>
-      {logoutError && <div className="alert error" role="alert">{logoutError}</div>}
-      {children}
-    </main>
-  </div>;
+  return (
+    <div className="app-shell top-layout">
+      <header className="school-header">
+
+        {}
+        <div className="school-header-main">
+
+          {}
+          <button
+            type="button"
+            className="school-brand"
+            onClick={() =>
+              onNavigate(navigation[0]?.path || "/")
+            }
+          >
+            <span className="school-logo-box">
+              <img
+                src="https://giaoduc247.vn/uploads/082021/images/Screenshot%202023-07-01%20at%2017_35_36.png"
+                alt="Logo HUIT"
+              />
+            </span>
+
+            <span className="school-brand-text">
+              <strong>
+                Đại học Công Thương TP.HCM
+              </strong>
+
+              <small>
+                Hệ thống xếp thời khóa biểu ·{" "}
+                {roleLabels[user.role]}
+              </small>
+            </span>
+          </button>
+
+          {}
+          <div className="header-user">
+
+            {connection && (
+              <span
+                className={`top-connection ${
+                  connection.online
+                    ? "online"
+                    : ""
+                }`}
+              >
+                {connection.label}
+              </span>
+            )}
+
+            <span className="header-avatar">
+              {user.display_name
+                .trim()
+                .charAt(0)
+                .toUpperCase() || "U"}
+            </span>
+
+            <span className="header-user-copy">
+              <strong>
+                {user.display_name}
+              </strong>
+
+              <small>
+                {user.username} ·{" "}
+                {roleLabels[user.role]}
+              </small>
+            </span>
+
+            <button
+              type="button"
+              className="header-logout"
+              disabled={loggingOut}
+              onClick={() => void logout()}
+            >
+              {loggingOut
+                ? "Đang đăng xuất..."
+                : "Đăng xuất"}
+            </button>
+          </div>
+        </div>
+
+        {}
+        <nav
+          className="top-navigation"
+          aria-label="Điều hướng chính"
+        >
+          {navigation.map((item) => (
+            <button
+              type="button"
+              key={item.path}
+              className={
+                currentPath === item.path
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                onNavigate(item.path)
+              }
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {}
+      <main className="portal-content">
+
+        <header className="portal-header clean-header">
+          <div>
+            <p className="eyebrow">
+              {eyebrow}
+            </p>
+
+            <h1>{title}</h1>
+
+            <p>{description}</p>
+          </div>
+        </header>
+
+        {logoutError && (
+          <div
+            className="alert error"
+            role="alert"
+          >
+            {logoutError}
+          </div>
+        )}
+
+        {children}
+      </main>
+    </div>
+  );
 }
 
 export function roleLabel(role: UserRole) {
