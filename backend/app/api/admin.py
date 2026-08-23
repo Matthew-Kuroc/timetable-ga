@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from backend.app.api.auth import user_payload
 from backend.app.api.dependencies import require_roles
 from backend.app.db.models import AppUserModel
+from backend.app.db.session import get_session_local
 from backend.app.domain.auth import UserRole
 from backend.app.services.user_service import (
     AccountConflictError,
@@ -18,6 +19,7 @@ from backend.app.services.user_service import (
     list_users,
     update_user,
 )
+from backend.app.services.runtime_store import list_confirmed_lecturers
 
 
 AdminUser = Annotated[AppUserModel, Depends(require_roles(UserRole.ADMIN))]
@@ -62,6 +64,25 @@ def get_users(
         "users": [user_payload(user, include_timestamps=True) for user in users],
         "total": total,
     }
+
+
+@router.get("/lecturers")
+def get_lecturers(_admin: AdminUser) -> dict[str, Any]:
+    """List valid lecturer identifiers for account provisioning."""
+    result = list_confirmed_lecturers()
+    with get_session_local()() as session:
+        accounts = {
+            user.lecturer_code: user
+            for user in session.query(AppUserModel).filter(
+                AppUserModel.role == UserRole.LECTURER.value,
+                AppUserModel.lecturer_code.is_not(None),
+            )
+        }
+    for lecturer in result.get("lecturers", []):
+        account = accounts.get(lecturer.get("lecturer_code"))
+        lecturer["account_username"] = account.username if account else None
+        lecturer["account_active"] = account.active if account else None
+    return result
 
 
 @router.post("/users", status_code=status.HTTP_201_CREATED)

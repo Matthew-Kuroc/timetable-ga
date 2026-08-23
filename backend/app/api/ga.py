@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import csv
+import unicodedata
 import zipfile
 from datetime import date, datetime, timezone
 from html import escape
 from io import StringIO
 from io import BytesIO
-from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.api.dependencies import require_roles
 from backend.app.algorithms.genetic.simple_ga import GeneticAlgorithmConfig, run_simple_genetic_algorithm
@@ -22,6 +22,7 @@ from backend.app.domain.auth import UserRole
 from backend.app.scheduling.calendar_expansion import expand_base_assignments_to_occurrences
 from backend.app.services.runtime_store import (
     batch_directory,
+    batch_summary,
     create_run,
     list_official_timetables,
     list_runs,
@@ -58,8 +59,9 @@ class SoftWeightsRequest(BaseModel):
 
 
 class GaRunRequest(BaseModel):
-    batch_code: str | None = None
-    data_dir: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    batch_code: str = Field(min_length=1)
     population_size: int = Field(default=80, ge=1)
     generations: int = Field(default=200, ge=1)
     seed: int | None = 42
@@ -73,7 +75,7 @@ class GaRunRequest(BaseModel):
 
 @router.post("/runs/preview")
 def run_ga_preview(request: GaRunRequest) -> dict[str, object]:
-    data_dir = batch_directory(request.batch_code) if request.batch_code else Path(request.data_dir or "data/samples/small")
+    data_dir = batch_directory(request.batch_code)
     validation_result = validate_sample_dataset(data_dir)
     if not validation_result.is_valid or validation_result.data is None:
         return {
@@ -191,10 +193,10 @@ def run_ga_preview(request: GaRunRequest) -> dict[str, object]:
         }
         for item in expansion.skipped_holiday_sessions
     ]
-    if request.batch_code:
-        response["batch_code"] = request.batch_code
-        response["run_code"] = create_run(response)
-        persist_ga_run(request.batch_code, response, validation_result.data)
+    response["batch_code"] = request.batch_code
+    response["batch_display_name"] = str(batch_summary(request.batch_code).get("display_name") or request.batch_code)
+    response["run_code"] = create_run(response)
+    persist_ga_run(request.batch_code, response, validation_result.data)
     return response
 
 
@@ -505,20 +507,34 @@ def _validate_effective_occurrence_conflicts(data, official: dict[str, object]) 
 
 
 @router.get("/runs/{run_code}/export.csv")
-def export_run_csv(run_code: str) -> StreamingResponse:
+def export_run_csv(
+    run_code: str,
+    lecturer_code: str | None = Query(default=None),
+    room_code: str | None = Query(default=None),
+    section_code: str | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+) -> StreamingResponse:
     run = read_run(run_code)
     stream = StringIO()
-    fields, rows = _export_rows(run)
+    fields, rows = _export_rows(run, lecturer_code=lecturer_code, room_code=room_code, section_code=section_code, date_from=date_from, date_to=date_to)
     writer = csv.DictWriter(stream, fieldnames=fields)
     writer.writeheader()
     writer.writerows(rows)
-    return StreamingResponse(iter(["\ufeff" + stream.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{run_code}.csv"'})
+    return StreamingResponse(iter(["\ufeff" + stream.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{_export_filename(run_code, "csv", _payload_batch_display_name(run))}"'})
 
 
 @router.get("/runs/{run_code}/export.xlsx")
-def export_run_xlsx(run_code: str) -> StreamingResponse:
+def export_run_xlsx(
+    run_code: str,
+    lecturer_code: str | None = Query(default=None),
+    room_code: str | None = Query(default=None),
+    section_code: str | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+) -> StreamingResponse:
     run = read_run(run_code)
-    fields, export_rows = _export_rows(run)
+    fields, export_rows = _export_rows(run, lecturer_code=lecturer_code, room_code=room_code, section_code=section_code, date_from=date_from, date_to=date_to)
     rows = [fields, *[[str(item.get(field, "")) for field in fields] for item in export_rows]]
     output = BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -528,24 +544,38 @@ def export_run_xlsx(run_code: str) -> StreamingResponse:
         archive.writestr("xl/_rels/workbook.xml.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
         sheet_rows = "".join(f'<row r="{row_index}">' + "".join(f'<c r="{_excel_column(column_index)}{row_index}" t="inlineStr"><is><t>{escape(value)}</t></is></c>' for column_index, value in enumerate(row, start=1)) + "</row>" for row_index, row in enumerate(rows, start=1))
         archive.writestr("xl/worksheets/sheet1.xml", f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{sheet_rows}</sheetData></worksheet>')
-    return StreamingResponse(iter([output.getvalue()]), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{run_code}.xlsx"'})
+    return StreamingResponse(iter([output.getvalue()]), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{_export_filename(run_code, "xlsx", _payload_batch_display_name(run))}"'})
 
 
 @router.get("/official-timetables/{official_code}/export.csv")
-def export_official_csv(official_code: str) -> StreamingResponse:
+def export_official_csv(
+    official_code: str,
+    lecturer_code: str | None = Query(default=None),
+    room_code: str | None = Query(default=None),
+    section_code: str | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+) -> StreamingResponse:
     official = read_official_timetable(official_code)
     stream = StringIO()
-    fields, rows = _export_rows(official)
+    fields, rows = _export_rows(official, lecturer_code=lecturer_code, room_code=room_code, section_code=section_code, date_from=date_from, date_to=date_to)
     writer = csv.DictWriter(stream, fieldnames=fields)
     writer.writeheader()
     writer.writerows(rows)
-    return StreamingResponse(iter(["\ufeff" + stream.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{official_code}.csv"'})
+    return StreamingResponse(iter(["\ufeff" + stream.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{_export_filename(official_code, "csv", _payload_batch_display_name(official))}"'})
 
 
 @router.get("/official-timetables/{official_code}/export.xlsx")
-def export_official_xlsx(official_code: str) -> StreamingResponse:
+def export_official_xlsx(
+    official_code: str,
+    lecturer_code: str | None = Query(default=None),
+    room_code: str | None = Query(default=None),
+    section_code: str | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+) -> StreamingResponse:
     official = read_official_timetable(official_code)
-    fields, export_rows = _export_rows(official)
+    fields, export_rows = _export_rows(official, lecturer_code=lecturer_code, room_code=room_code, section_code=section_code, date_from=date_from, date_to=date_to)
     rows = [fields, *[[str(item.get(field, "")) for field in fields] for item in export_rows]]
     output = BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -555,7 +585,7 @@ def export_official_xlsx(official_code: str) -> StreamingResponse:
         archive.writestr("xl/_rels/workbook.xml.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
         sheet_rows = "".join(f'<row r="{row_index}">' + "".join(f'<c r="{_excel_column(column_index)}{row_index}" t="inlineStr"><is><t>{escape(value)}</t></is></c>' for column_index, value in enumerate(row, start=1)) + "</row>" for row_index, row in enumerate(rows, start=1))
         archive.writestr("xl/worksheets/sheet1.xml", f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{sheet_rows}</sheetData></worksheet>')
-    return StreamingResponse(iter([output.getvalue()]), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{official_code}.xlsx"'})
+    return StreamingResponse(iter([output.getvalue()]), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{_export_filename(official_code, "xlsx", _payload_batch_display_name(official))}"'})
 
 
 def _excel_column(index: int) -> str:
@@ -566,7 +596,36 @@ def _excel_column(index: int) -> str:
     return label
 
 
-def _export_rows(run: dict[str, object]) -> tuple[list[str], list[dict[str, object]]]:
+def _export_filename(code: str, extension: str, display_name: str | None = None) -> str:
+    label = str(display_name or "").strip() or code
+    transliterated = label.replace("đ", "d").replace("Đ", "D")
+    ascii_label = unicodedata.normalize("NFKD", transliterated).encode("ascii", "ignore").decode("ascii")
+    safe_label = "".join("-" if character in '<>:"/\\|?*' else character for character in ascii_label).strip(" .") or code
+    return f"{safe_label}-{code}-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}.{extension}"
+
+
+def _payload_batch_display_name(payload: dict[str, object]) -> str:
+    label = str(payload.get("batch_display_name") or "").strip()
+    if label:
+        return label
+    batch_code = str(payload.get("batch_code") or "").strip()
+    if not batch_code:
+        return ""
+    try:
+        return str(batch_summary(batch_code).get("display_name") or batch_code)
+    except HTTPException:
+        return batch_code
+
+
+def _export_rows(
+    run: dict[str, object],
+    *,
+    lecturer_code: str | None = None,
+    room_code: str | None = None,
+    section_code: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> tuple[list[str], list[dict[str, object]]]:
     """Export the effective dated timetable, including one-session changes."""
     fields = ["date", "academic_week", "status", "section_code", "course_code", "course_name", "lecturer_code", "lecturer_name", "room_code", "slot_code", "day_of_week", "start_period", "end_period", "course_type", "scheduling_student_count"]
     assignments = {str(item["section_code"]): item for item in run.get("assignments", [])}
@@ -576,9 +635,41 @@ def _export_rows(run: dict[str, object]) -> tuple[list[str], list[dict[str, obje
         for occurrence in occurrences:
             assignment = assignments.get(str(occurrence["section_code"]), {})
             combined = {**assignment, **occurrence}
-            rows.append({field: combined.get(field, "") for field in fields})
+            row = {field: combined.get(field, "") for field in fields}
+            if _export_row_matches(row, lecturer_code, room_code, section_code, date_from, date_to):
+                rows.append(row)
         return fields, sorted(rows, key=lambda item: (str(item.get("date", "")), str(item.get("section_code", ""))))
-    return fields, [{field: item.get(field, "") for field in fields} for item in run.get("assignments", [])]
+    rows = [{field: item.get(field, "") for field in fields} for item in run.get("assignments", [])]
+    return fields, [row for row in rows if _export_row_matches(row, lecturer_code, room_code, section_code, date_from, date_to)]
+
+
+def _export_row_matches(
+    row: dict[str, object],
+    lecturer_code: str | None,
+    room_code: str | None,
+    section_code: str | None,
+    date_from: date | None,
+    date_to: date | None,
+) -> bool:
+    if lecturer_code and str(row.get("lecturer_code") or "") != lecturer_code:
+        return False
+    if room_code and str(row.get("room_code") or "") != room_code:
+        return False
+    if section_code and str(row.get("section_code") or "") != section_code:
+        return False
+    if date_from or date_to:
+        value = str(row.get("date") or "")
+        if not value:
+            return False
+        try:
+            row_date = date.fromisoformat(value)
+        except ValueError:
+            return False
+        if date_from and row_date < date_from:
+            return False
+        if date_to and row_date > date_to:
+            return False
+    return True
 
 
 def _slots_overlap(first: object, second: object) -> bool:

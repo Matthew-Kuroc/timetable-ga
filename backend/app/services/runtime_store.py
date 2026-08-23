@@ -86,6 +86,32 @@ def list_batches() -> list[dict[str, object]]:
     return sorted((batch_summary(path.name) for path in BATCH_ROOT.iterdir() if path.is_dir() and (path / "manifest.json").exists()), key=lambda item: str(item["created_at"]), reverse=True)
 
 
+def list_confirmed_lecturers() -> dict[str, object]:
+    """Return lecturer choices from the newest valid confirmed dataset.
+
+    Account provisioning must use the same lecturer identifiers that feed the
+    timetable.  The catalog is intentionally read from the latest confirmed
+    batch instead of the development ``official`` fixture.
+    """
+    for batch in list_batches():
+        if str(batch.get("status") or "") != "CONFIRMED" or not batch.get("valid"):
+            continue
+        validation = validate_sample_dataset(batch_directory(str(batch["batch_code"])))
+        if validation.data is None:
+            continue
+        lecturers = [
+            {"lecturer_code": lecturer.lecturer_code, "lecturer_name": lecturer.lecturer_name}
+            for lecturer in validation.data.lecturers.values()
+        ]
+        lecturers.sort(key=lambda item: (str(item["lecturer_name"]), str(item["lecturer_code"])))
+        return {
+            "batch_code": batch["batch_code"],
+            "batch_display_name": batch.get("display_name") or batch["batch_code"],
+            "lecturers": lecturers,
+        }
+    return {"batch_code": None, "batch_display_name": None, "lecturers": []}
+
+
 def batch_directory(batch_code: str) -> Path:
     path = BATCH_ROOT / batch_code
     if not path.is_dir() or not (path / "manifest.json").exists():
