@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import copy
 import json
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,7 +35,9 @@ from backend.app.db.models import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-RUNTIME_ROOT = REPO_ROOT / "data" / "runtime"
+RUNTIME_ROOT = Path(
+    os.getenv("TIMETABLE_RUNTIME_ROOT", str(REPO_ROOT / "data" / "runtime"))
+).resolve()
 BATCH_ROOT = RUNTIME_ROOT / "batches"
 RUN_ROOT = RUNTIME_ROOT / "runs"
 
@@ -362,7 +365,7 @@ def persist_ga_run(batch_code: str, payload: dict[str, object], input_data: obje
                 if model is None:
                     model = CourseSectionModel(import_batch_id=batch.id, section_code=value.section_code, lecturer_id=lecturers[value.lecturer_code].id, course_code=value.course_code, course_name=value.course_name, required_sessions=value.required_sessions, periods_per_session=value.periods_per_session, expected_students=value.expected_students, scheduling_student_count=value.scheduling_student_count, course_type=value.course_type, required_room_type=value.required_room_type, start_date=value.start_date, end_date=value.end_date)
                     session.add(model)
-                model.lecturer_id, model.weekly_sessions, model.initial_registration_limit, model.approved_max_students = lecturers[value.lecturer_code].id, value.weekly_sessions, value.initial_registration_limit, value.approved_max_students
+                model.lecturer_id, model.weekly_sessions, model.second_session_periods, model.initial_registration_limit, model.approved_max_students = lecturers[value.lecturer_code].id, value.weekly_sessions, value.second_session_periods, value.initial_registration_limit, value.approved_max_students
                 session.flush(); sections[value.section_code] = model
             run = session.scalar(select(GaRunModel).where(GaRunModel.run_code == str(payload["run_code"])))
             if run is None:
@@ -391,10 +394,10 @@ def persist_ga_run(batch_code: str, payload: dict[str, object], input_data: obje
             session.query(ScheduleAssignmentModel).filter(ScheduleAssignmentModel.ga_run_id == run.id).delete()
             assignment_models = {}
             for value in payload.get("assignments", []):
-                model = ScheduleAssignmentModel(ga_run_id=run.id, course_section_id=sections[value["section_code"]].id, lecturer_id=lecturers[value["lecturer_code"]].id, room_id=rooms[value["room_code"]].id, time_slot_id=slots[value["slot_code"]].id, status="SCHEDULED")
-                session.add(model); session.flush(); assignment_models[value["section_code"]] = model
+                model = ScheduleAssignmentModel(ga_run_id=run.id, course_section_id=sections[value["section_code"]].id, lecturer_id=lecturers[value["lecturer_code"]].id, room_id=rooms[value["room_code"]].id, time_slot_id=slots[value["slot_code"]].id, meeting_number=int(value.get("meeting_number", 1)), status="SCHEDULED")
+                session.add(model); session.flush(); assignment_models[(value["section_code"], int(value.get("meeting_number", 1)))] = model
             for value in payload.get("occurrences", []):
-                assignment = assignment_models[value["section_code"]]
+                assignment = assignment_models[(value["section_code"], int(value.get("meeting_number", 1)))]
                 session.add(ScheduleOccurrenceModel(schedule_assignment_id=assignment.id, course_section_id=sections[value["section_code"]].id, date=__import__("datetime").date.fromisoformat(value["date"]), academic_week=int(value["academic_week"]), room_id=rooms[value["room_code"]].id, time_slot_id=slots[value["slot_code"]].id, status=value["status"]))
             session.commit()
             _write_run_snapshot(str(payload["run_code"]), payload)

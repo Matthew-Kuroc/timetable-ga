@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -19,8 +20,9 @@ router = APIRouter(prefix="/api/lecturer", tags=["lecturer"])
 def get_personal_timetable(
     current_user: LecturerUser,
     week: int = Query(ge=1, le=53),
+    selected_date: date | None = Query(default=None),
 ) -> dict[str, Any]:
-    return personal_timetable(_lecturer_code(current_user), week)
+    return personal_timetable(_lecturer_code(current_user), week, selected_date)
 
 
 @router.get("/course-sections")

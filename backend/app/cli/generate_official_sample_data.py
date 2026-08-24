@@ -173,6 +173,7 @@ def _write_course_sections(output_dir: Path, section_count: int) -> None:
                 "required_sessions": "15",
                 "weekly_sessions": "1",
                 "periods_per_session": str(periods),
+                "second_session_periods": "",
                 "expected_students": str(expected_students),
                 "initial_registration_limit": str(initial_limit),
                 "approved_max_students": approved_max,
@@ -238,7 +239,7 @@ def _write_academic_calendar(output_dir: Path) -> None:
         date(2026, 11, 20): ("Ngày Nhà giáo Việt Nam", "Không sinh buổi học bình thường"),
         date(2026, 12, 7): ("Tuần dự phòng thi", "Không sinh buổi học bình thường"),
     }
-    for offset in range(15 * 7):
+    for offset in range(18 * 7):
         current = start_date + timedelta(days=offset)
         academic_week = offset // 7 + 1
         day_of_week = current.weekday() + 2

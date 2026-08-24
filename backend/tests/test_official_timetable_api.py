@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import shutil
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -58,6 +58,18 @@ def test_date_range_adjustment_and_segment_are_recorded(tmp_path, monkeypatch) -
     assert adjustment.status_code == 200
     assert adjustment.json()["official"]["change_history"][-1]["scope"] == "DATE_RANGE"
 
+    recurring_slot_change = client.put(
+        f"/api/ga/official-timetables/{official['official_code']}/adjustments",
+        json={"section_code": first["section_code"], "scope": "DATE_RANGE", "effective_start_date": start, "effective_end_date": end, "room_code": first["room_code"], "slot_code": "TUE_1_3", "reason": "Không đổi lịch lặp sau công bố"},
+    )
+    assert recurring_slot_change.status_code == 409
+
+    recurring_segment_change = client.post(
+        f"/api/ga/official-timetables/{official['official_code']}/segments",
+        json={"section_code": first["section_code"], "effective_start_date": start, "effective_end_date": end, "room_code": first["room_code"], "slot_code": "TUE_1_3", "reason": "Không đổi lịch lặp sau công bố"},
+    )
+    assert recurring_segment_change.status_code == 409
+
     segment = client.post(
         f"/api/ga/official-timetables/{official['official_code']}/segments",
         json={"section_code": first["section_code"], "effective_start_date": start, "effective_end_date": end, "room_code": first["room_code"], "slot_code": first["slot_code"], "reason": "Kiểm thử phân đoạn"},
@@ -110,6 +122,76 @@ def test_makeup_session_is_added_only_after_conflict_check(tmp_path, monkeypatch
     assert response.json()["official"]["makeup_sessions"][0]["status"] == "MAKEUP"
 
 
+def test_makeup_window_accepts_week_18_rejects_week_19_and_keeps_conflict_checks(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(runtime_store, "BATCH_ROOT", tmp_path / "runtime" / "batches")
+    monkeypatch.setattr(runtime_store, "RUN_ROOT", tmp_path / "runtime" / "runs")
+    source = tmp_path / "source"
+    shutil.copytree(REPO_ROOT / "data" / "samples" / "small", source)
+    with (source / "academic_calendar.csv").open("a", encoding="utf-8", newline="") as file:
+        for academic_week, start in ((19, date(2027, 1, 4)),):
+            for offset in range(7):
+                teaching_date = start + timedelta(days=offset)
+                file.write(f"{teaching_date.isoformat()},{academic_week},{teaching_date.isoweekday() + 1},true,false,,\n")
+
+    batch = runtime_store.create_confirmed_batch(source)
+    client = authenticated_client()
+    run_response = client.post(
+        "/api/ga/runs/preview",
+        json={"batch_code": batch["batch_code"], "population_size": 12, "generations": 4, "seed": 42},
+    )
+    assert run_response.status_code == 200
+    run = run_response.json()
+    publish_response = client.post(
+        f"/api/ga/runs/{run['run_code']}/publish",
+        json={"note": "Kiểm thử cửa sổ học bù"},
+    )
+    assert publish_response.status_code == 200
+    official = publish_response.json()
+    assignment = official["assignments"][0]
+    week18_start = date(2026, 12, 28)
+    makeup_date = week18_start + timedelta(days=assignment["day_of_week"] - 2)
+
+    accepted = client.post(
+        f"/api/ga/official-timetables/{official['official_code']}/makeups",
+        json={
+            "section_code": assignment["section_code"],
+            "makeup_date": makeup_date.isoformat(),
+            "room_code": assignment["room_code"],
+            "slot_code": assignment["slot_code"],
+            "original_missing_date": "2026-09-14",
+            "reason": "Bù trong tuần 18",
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["official"]["makeup_sessions"][0]["original_missing_date"] == "2026-09-14"
+
+    conflict = client.post(
+        f"/api/ga/official-timetables/{official['official_code']}/makeups",
+        json={
+            "section_code": assignment["section_code"],
+            "makeup_date": makeup_date.isoformat(),
+            "room_code": assignment["room_code"],
+            "slot_code": assignment["slot_code"],
+            "reason": "Không được trùng",
+        },
+    )
+    assert conflict.status_code == 422
+
+    week19_start = date(2027, 1, 4)
+    week19_date = week19_start + timedelta(days=assignment["day_of_week"] - 2)
+    rejected = client.post(
+        f"/api/ga/official-timetables/{official['official_code']}/makeups",
+        json={
+            "section_code": assignment["section_code"],
+            "makeup_date": week19_date.isoformat(),
+            "room_code": assignment["room_code"],
+            "slot_code": assignment["slot_code"],
+            "reason": "Ngoài cửa sổ học bù",
+        },
+    )
+    assert rejected.status_code == 422
+
+
 def test_skipped_holiday_sessions_include_course_and_lecturer_context(tmp_path, monkeypatch) -> None:
     client, run, _official = _published_official(tmp_path, monkeypatch)
     skipped = run["skipped_holiday_sessions"]
@@ -128,9 +210,10 @@ def test_export_filters_by_lecturer_and_includes_timestamp(tmp_path, monkeypatch
         params={"lecturer_code": first["lecturer_code"]},
     )
     assert response.status_code == 200
-    assert response.headers["content-disposition"].startswith(
-        f'attachment; filename="{official["official_code"]}-'
-    )
+    disposition = response.headers["content-disposition"]
+    assert disposition.startswith('attachment; filename="')
+    assert f'-{official["official_code"]}-' in disposition
+    assert disposition.endswith('.csv"')
     rows = response.text.lstrip("\ufeff").splitlines()
     assert len(rows) > 1
     assert all(first["lecturer_code"] in row for row in rows[1:])

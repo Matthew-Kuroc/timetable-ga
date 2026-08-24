@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import zipfile
+from datetime import date
 from io import BytesIO
 from pathlib import Path
 
@@ -66,13 +67,14 @@ def test_direct_adjustment_changes_only_one_dated_occurrence_on_official_timetab
     export_response = client.get(f"/api/ga/official-timetables/{official['official_code']}/export.csv")
     assert export_response.status_code == 200
     assert "date,academic_week,status,section_code" in export_response.text
-    assert occurrence["date"] in export_response.text
+    assert date.fromisoformat(occurrence["date"]).strftime("%d-%m-%Y") in export_response.text
     xlsx_response = client.get(f"/api/ga/official-timetables/{official['official_code']}/export.xlsx")
     assert xlsx_response.status_code == 200
     assert xlsx_response.headers["content-type"].startswith("application/vnd.openxmlformats")
-    assert xlsx_response.headers["content-disposition"].startswith(
-        f'attachment; filename="{official["official_code"]}-'
-    )
+    disposition = xlsx_response.headers["content-disposition"]
+    assert disposition.startswith('attachment; filename="')
+    assert f'-{official["official_code"]}-' in disposition
+    assert disposition.endswith('.xlsx"')
     with zipfile.ZipFile(BytesIO(xlsx_response.content)) as workbook:
         assert "xl/worksheets/sheet1.xml" in workbook.namelist()
         assert occurrence["section_code"] in workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")

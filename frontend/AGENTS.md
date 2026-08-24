@@ -43,6 +43,11 @@ outside-user or public self-registration access.
 
 Do not introduce another role unless the URS and SRS are formally updated.
 
+For the internship MVP, each account has exactly one role, and the runtime
+policy allows one `ADMIN`, one `TRAINING_OFFICE`, and multiple `LECTURER`
+accounts. There is no public registration or self-service forgotten-password
+workflow. Each Lecturer account is bound to one stable `lecturer_code`.
+
 ### Administrator
 
 The Administrator frontend may provide:
@@ -52,6 +57,14 @@ The Administrator frontend may provide:
 - Account creation and role assignment.
 - Account activation/deactivation.
 - Account and authentication audit history.
+- Explicit bulk Lecturer provisioning from confirmed lecturer codes.
+- One-time temporary-password reset for a Lecturer, with the generated value
+  shown only once and never recoverable later.
+
+The frontend must force an account marked `must_change_password` to replace
+the temporary password before entering its normal portal. It must not expose
+stored password hashes, reuse a shared default password, or offer a public
+forgot-password form. An authenticated user may change their own password.
 
 ### Training Office
 
@@ -404,6 +417,11 @@ The GA configuration screen should support at least:
 - Mutation rate.
 - Soft-constraint weights.
 
+Pre-fill the accepted experiment baseline: lecturer preferences `10`, room
+capacity waste `1`, large-room/small-class `25`, schedule gaps `4`, scattered
+days `8`, excess consecutive sessions `6`, and evening/weekend avoidance `5`.
+The user may change non-negative values; store and display the run snapshot.
+
 It may also support:
 
 - Execution time limit.
@@ -533,6 +551,10 @@ Display time slots consistently, for example:
 - Tiết 1–6
 - Tiết 2–6
 
+A multi-meeting practice/integrated section may also use configured two- or
+three-period component slots. Display only slots supplied by the backend; do
+not invent a two-period range in the browser.
+
 Do not assume all time slots contain three periods.
 
 Never allow the interface to construct arbitrary invalid ranges such as
@@ -554,8 +576,12 @@ An integrated course section:
 
 - Is displayed as one course section.
 - Has one primary lecturer.
-- Uses one five-period or six-period session.
-- Must not be displayed as separate theory and practice timetable entries.
+- Has five or six total weekly periods, possibly declared as one continuous
+  meeting or two meetings such as `3+2` or `3+3`.
+- Must not be displayed as separate theory and practice course sections or
+  pedagogical components. Multiple scheduled meetings remain entries of the
+  same `INTEGRATED` section.
+- May have consecutive-day meetings because no minimum day gap is required.
 
 Display the required room type separately from the course type.
 
@@ -688,6 +714,12 @@ adjustment scope:
 Display the selected scope clearly before confirmation.
 
 Do not modify all occurrences when the user selected only one occurrence.
+
+The recurring day/time schedule is locked when the official timetable is
+published for student registration. After that point, do not offer a whole-
+schedule day/time change. The Training Office may still create an audited
+room-only segment for a long-term facility problem when the day and time slot
+remain unchanged and backend hard validation passes.
 
 Do not independently implement segment-splitting rules in multiple components.
 Use backend APIs and shared frontend utilities.
@@ -827,6 +859,10 @@ availability.
 Display the relationship between the makeup session and the missed session
 when that information is available.
 
+Allow valid configured teaching dates in academic weeks 16–18 even when a
+normal 15-week section has ended. Show a clear backend validation error for
+week 19 or later.
+
 ---
 
 ## 23. Forms
@@ -923,6 +959,9 @@ Send API dates in the documented API format, normally:
 
 Do not send locale-formatted dates to the backend unless the API explicitly
 requires them.
+
+Exported CSV/XLSX date cells use `dd-MM-yyyy` for the confirmed Vietnamese
+handoff format; this does not change the ISO API contract.
 
 Display GA rates consistently as either:
 
@@ -1035,6 +1074,7 @@ At minimum, test:
 - Theory time-slot labels.
 - Practice time-slot labels.
 - Integrated-course display.
+- Practice/integrated `3+2` multi-meeting display and consecutive-day meetings.
 - Room-capacity hard errors.
 - Large-room soft warnings.
 - Holiday dates without normal sessions.
@@ -1047,6 +1087,7 @@ At minimum, test:
 - Request approval.
 - Request rejection.
 - Makeup-session creation.
+- Makeup creation in week 18 and rejection in week 19.
 - Empty, loading, and error states.
 
 Avoid fragile tests that depend heavily on CSS classes or internal component

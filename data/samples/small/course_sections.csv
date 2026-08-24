@@ -1,4 +1,4 @@
-course_code,course_name,section_code,lecturer_code,required_sessions,weekly_sessions,periods_per_session,expected_students,initial_registration_limit,approved_max_students,scheduling_student_count,course_type,required_room_type,start_date,end_date,campus_code,notes
+course_code,course_name,section_code,lecturer_code,required_sessions,weekly_sessions,periods_per_session,expected_students,initial_registration_limit,approved_max_students,scheduling_student_count,course_type,required_room_type,start_date,end_date,campus_code,notes,second_session_periods
 IT401,Phân tích thiết kế thuật toán,IT401_01,GV001,15,1,3,50,50,55,55,THEORY,THEORY_ROOM,2026-09-01,2026-12-20,CS1,
 IT402,Cơ sở dữ liệu,IT402_01,GV002,15,1,3,48,50,,50,THEORY,THEORY_ROOM,2026-09-01,2026-12-20,CS1,
 IT403,Thực hành lập trình,IT403_01,GV003,15,1,5,35,40,,40,PRACTICE,COMPUTER_LAB,2026-09-01,2026-12-20,CS1,

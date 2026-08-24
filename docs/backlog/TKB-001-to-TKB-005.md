@@ -1,7 +1,163 @@
 ﻿# Ban Giao Va Backlog Hien Tai
 
-Cap nhat: 10/08/2026. Day la tai lieu ban giao ky thuat cho phien Codex sau.
+Cap nhat: 24/08/2026. Day la tai lieu ban giao ky thuat cho phien Codex sau.
 URS/SRS trong `docs/requirements/` van la nguon yeu cau nghiep vu chinh thuc.
+
+## Quyet dinh bo du lieu quy mo truong - 24/08/2026
+
+Nguoi huong dan khong the cung cap du lieu goc cua truong vi yeu cau bao mat.
+Thay da dong y nhom tu tao bo du lieu tong hop co quy mo tuong duong de thu
+nghiem, voi cac muc tieu xap xi:
+
+- `600` giang vien.
+- `3.000` lop hoc phan.
+- `150` phong hoc.
+
+Day la du lieu gia lap/an danh, khong duoc sao chep hoac tuyen bo la du lieu
+that cua truong. Bo du lieu phai van dung schema bay CSV cua du an, giu moi
+tham chieu hop le va khong chua du lieu ca nhan that.
+
+### Viec can lam o phien tiep theo
+
+1. Viet generator co seed co dinh de tao lai cung mot bo du lieu quy mo tren;
+   khong viet tay 3.000 dong va khong commit file tam ngoai pham vi can thiet.
+2. Tao toi thieu `lecturers.csv` 600 giang vien, `course_sections.csv` 3.000
+   lop va `rooms.csv` 150 phong; cac file preference, unavailable slot, time
+   slot va academic calendar phai duoc sinh dong bo theo schema bay file.
+3. Phan bo du lieu du loai `THEORY`, `PRACTICE`, `INTEGRATED`, phong thuong/
+   phong may/phong chuyen dung, si so, meeting mot buoi va hai buoi `3+2`/`3+3`.
+4. Chay CSV validator, import PostgreSQL, GA va occurrence expansion; ghi lai
+   thoi gian, bo nho, so gene, so occurrence, hard violations va best-so-far.
+5. Day la bai stress/scale rieng, khong tu y thay the tieu chi MVP 100-200 lop
+   trong 10 phut. Neu cau hinh `80 x 200` qua lon, phai ghi so lieu va toi uu
+   hoac dung time limit/best-so-far, khong am tham ha rang buoc cung.
+
+## Quyet dinh cap tai khoan va mat khau - 24/08/2026
+
+- Batch tong hop van co 600 giang vien de GA/stress test, nhung demo chi can
+  cap tai khoan cho mot nhom dai dien. Chi tao du 600 account khi test quy mo
+  quan ly tai khoan.
+- Admin duoc chay thao tac/script idempotent de cap account Lecturer theo mot
+  danh sach `lecturer_code` hoac toan bo batch da xac nhan. Import CSV khong tu
+  dong tao account hay mat khau.
+- Moi account moi co username on dinh va mat khau tam ngau nhien rieng; cam
+  dung mot mat khau mac dinh chung. Database chi luu hash.
+- Script co `--dry-run`, bao created/skipped/conflict va chi ghi plaintext mat
+  khau tam mot lan vao file ban giao trong `.tmp`/duong dan da bi Git ignore.
+  Khong in mat khau trong log va khong commit file credential.
+- Account co co `must_change_password=true`; lan dang nhap dau chi duoc vao
+  luong doi mat khau. Sau khi doi thanh cong moi vao portal binh thuong.
+- Khi Lecturer quen mat khau, Admin cap mot mat khau tam moi; khong xem lai
+  mat khau cu. Reset phai thu hoi session cu, bat doi mat khau lan nua va ghi
+  audit `PASSWORD_RESET_BY_ADMIN`.
+- Nguoi dung da dang nhap duoc doi mat khau cua chinh minh bang mat khau hien
+  tai. Van khong co public registration, email/SMS tu dong hay public/self-
+  service forgot-password trong MVP.
+
+### Viec trien khai tai khoan de lai phien sau
+
+1. Migration them `must_change_password` va cac truong/audit can thiet.
+2. Service/CLI bulk provisioning co secure random password, `--dry-run`, loc
+   `lecturer_code`, `--all-lecturers` va output credential an toan; khong ghi
+   de account da ton tai.
+3. API/UI doi mat khau lan dau, doi mat khau khi da dang nhap va Admin reset
+   Lecturer voi password chi hien thi mot lan.
+4. Test RBAC, password hashing, session revocation, audit, idempotency, file
+   credential bi ignore va demo voi mot vai Lecturer dai dien.
+
+## Checkpoint Va Quyet Dinh Nghiep Vu - 23/08/2026
+
+Nguoi dung da yeu cau luu backlog tai day de cac phien sau tiep tuc dung thu tu,
+khong phai phan tich lai tu dau. Khong duoc bo qua cac thay doi dang do trong
+worktree khi bat dau trien khai Tuan 8.
+
+### Quyet dinh da ghi nhan
+
+- Mot occurrence thuong ky bi tam ngung vi giang vien ban, quen day hoac ly do
+  tuong tu duoc tinh la thieu mot buoi cua lop hoc phan.
+- Giang vien va Phong Dao tao thong nhat phuong an; Phong Dao tao la ben gan
+  buoi hoc bu thu cong sau khi he thong kiem tra toan bo rang buoc cung.
+- Buoi bu co the duoc xep vao mot ngay/khung gio hop le khac trong cua so hoan
+  thanh hoc phan. Voi hoc phan thuong ky 15 tuan, nha truong van cho phep hoc bu
+  o tuan hoc vu 16, 17 hoac 18. Tuan 19 tro di khong thuoc cua so hoc bu hien
+  tai vi da vao giai doan giang vien nhap diem qua trinh.
+- Neu co thong tin buoi bi thieu, buoi bu phai giu lien ket
+  `original_missing_date` de doi chieu so buoi con thieu.
+- Khong nhan duoc CSV thuc te do yeu cau bao mat. Nguoi huong dan da cho phep
+  nhom tu sinh du lieu an danh quy mo tuong duong (khoang 600 giang vien, 3.000
+  lop, 150 phong) theo schema bay file cua du an. Khong tu nhan day la schema
+  tich hop san xuat hay du lieu goc cua nha truong.
+- Da ghi nhan co hoc phan `PRACTICE`/`INTEGRATED` co the co hai buoi trong mot
+  tuan. Vi du mot lop Du lieu NoSQL co the hoc tiet 10-12 Thu Hai va tiet 7-9
+  Thu Nam. Cac meeting phai duoc mo ta san trong du lieu dau vao; GA khong tu
+  chia mon hoc. Lop `THEORY` ba tiet thong thuong van mot buoi moi tuan.
+
+### Anh huong ky thuat chua trien khai
+
+- API hoc bu hien chi chap nhan ngay tu `section.start_date` den
+  `section.end_date`; can mo rong bang cua so hoc bu co cau hinh den het tuan
+  hoc vu 18, van bat buoc ngay day hop le, slot hop le, phong hop le va khong
+  trung phong/giang vien.
+- Mo hinh GA hien co mot base assignment cho moi lop hoc phan. Ho tro hai buoi
+  moi tuan can mo hinh nhieu base meeting/gene component cho mot section, khong
+  duoc mo rong thanh mot gene rieng cho tung occurrence theo ngay.
+- Schema mo rong giu batch bay file: `weekly_sessions` la `1` hoac `2`,
+  `periods_per_session` la so tiet cua meeting dau/duy nhat, va
+  `second_session_periods` bat buoc khi `weekly_sessions=2`. He thong sinh
+  `meeting_number` on dinh `1`/`2`; khong co rang buoc cach ngay toi thieu.
+
+### Trang thai xac minh cuoi Tuan 8
+
+- Backend: `80 passed, 1 skipped` khi chay voi PostgreSQL that; migration da
+  nang cap thanh cong den `20260824_0010`.
+- Frontend build thanh cong; Playwright mock `6 passed`; Playwright PostgreSQL
+  that `1 passed` cho luong CSV -> GA -> publish -> segment/hoc bu -> request ->
+  export va da xac minh truc tiep cac bang persistence.
+- Benchmark fixture 120 lop: khoang `5.98s`, khong co vi pham cung voi cau hinh
+  test 20 ca the, 20 the he, seed 42.
+- PostgreSQL local da chay migration moi `20260824_0010 (head)` cho meeting
+  thu hai; README, huong dan migration va checklist demo da duoc cap nhat.
+- Worktree co thay doi dang do cho lich giang vien theo ngay/tuan va thong tin
+  lop hoc phan; phai bo sung test va dong goi commit truoc khi mo rong tiep.
+
+### Thu tu trien khai Tuan 8 bat buoc
+
+1. Dong thay doi dang do: chot contract ten export, sua hai test, them test
+   `selected_date`/week bounds/teaching dates/required sessions va dua toan bo
+   backend, frontend build, E2E ve xanh.
+2. Mo rong hoc bu den cua so tuan 16-18 theo quyet dinh tren; them test tuan 18
+   hop le, tuan 19 bi tu choi va xung dot cung van bi tu choi.
+3. Chay rehearsal that tren PostgreSQL tu upload bay CSV, GA, publish, dieu
+   chinh, phan doan, hoc bu, request cua giang vien den export; ghi metrics.
+4. Mo rong E2E cho form phan doan, hoc bu, dieu chinh occurrence, gui/duyet/tu
+   choi/ap dung request va tai file export.
+5. Ra soat accessibility/responsive; cap nhat README/migration/checklist demo.
+6. Trien khai va kiem thu khoa doi ngay/gio sau cong bo, room-only segment dai
+   han, UI trong so mem, export ngay `DD-MM-YYYY` va mo hinh nhieu meeting.
+
+### Quyet dinh da chot tu `chốt tài liệu.txt`
+
+- Khoa doi toan bo ngay/gio lich lap ngay khi cong bo lich chinh thuc cho sinh
+  vien. Sau moc nay chua ghi nhan nhu cau doi ngay/gio toan bo lich.
+- Neu phong hoc co su co dai han nhu sua chua/nang cap, Phong Dao tao duoc doi
+  phong cho khoang ngay con lai nhung phai giu nguyen thu va tiet, co ly do,
+  audit va kiem tra rang buoc cung.
+- Giu baseline trong so mem: lecturer preference `10`, room waste `1`, large
+  hall `25`, gap `4`, scattered days `8`, excess consecutive sessions `6`,
+  evening/weekend `5`; Phong Dao tao duoc cau hinh va run phai luu snapshot.
+- Giu mot role/tai khoan, dung mot `ADMIN`, dung mot `TRAINING_OFFICE`, nhieu
+  `LECTURER`; khong self-registration hay public forgot-password. Admin duoc
+  cap lai mat khau tam cho Lecturer; Lecturer gan mot `lecturer_code` on dinh.
+- Export CSV UTF-8 BOM va XLSX theo occurrence; date cell dung `DD-MM-YYYY`,
+  filename `<ten-batch>-<run/official-code>-<timestamp>.<ext>`, giu bo loc theo
+  giang vien/phong/lop/khoang ngay.
+- Tieu chi: dataset 100-200 lop, config mac dinh population 80/generations 200,
+  hoan tat hoac luu best candidate trong 10 phut tren may tham chieu, ket qua
+  cong bo phai co 0 vi pham cung va luu runtime/seed/fitness/soft breakdown.
+- Lop nam tiet co the khai bao hai meeting `3+2`; `INTEGRATED` van la mot lop
+  ket hop, khong tach thanh entry ly thuyet va thuc hanh. Hai meeting co the hoc
+  hai ngay lien tiep, khong co minimum gap.
+- Chi noi dung dong goi/demo cuoi cung con cho hoi lai nguoi huong dan.
 
 ## Checkpoint Tuan 7 - 21/08/2026
 
@@ -14,7 +170,7 @@ chon ngay/thang/nam va cot ca hoc, cung cac kiem thu workflow/API/UI.
 Ket qua xac minh cuoi tuan: backend `74 passed, 2 skipped`; frontend build
 thanh cong; Playwright E2E `6 passed`; benchmark fixture 120 lop khong co vi
 pham rang buoc cung. Migration PostgreSQL moi nhat la
-`20260821_0009_protect_existing_bootstrap_admin.py`.
+`20260824_0010_multi_meeting_support.py`.
 
 Bao cao Word tuan 7 va script tao bao cao chi giu local trong
 `docs/reports/`, khong dua vao GitHub.
@@ -109,10 +265,10 @@ bien moi truong; khong ghi mat khau vao ma nguon, tai lieu hay Git.
 
 ### Chua hoan thanh
 
-- Chot voi nguoi huong dan cac van de dang mo trong UR/SRS: han doi toan bo
-  lich lap, quy tac hoc bu sau tam ngung, trong so mem va cau truc CSV thuc te.
-- Chuan bi kich ban demo voi PostgreSQL muc tieu va du lieu 100–200 lop sau khi
-  moi truong trien khai duoc cap credential hop le.
+- Tao va benchmark bo du lieu tong hop quy mo khoang 600 giang vien, 3.000 lop,
+  150 phong theo quyet dinh ngay 24/08/2026. Khong con cho CSV goc cua truong.
+- Dong goi thay doi dang do thanh cac commit ro rang sau khi ra soat file tam,
+  tai lieu va ket qua kiem thu cuoi.
 
 ## Backlog Uu Tien
 
@@ -200,8 +356,8 @@ tu dong gan giang vien hoac tim lich theo kha nang ranh cua sinh vien.
    sua va ten file CSV/XLSX; them test khong de mat ten khi publish.
 4. Ra soat accessibility/UI responsive tren man hinh nho, dac biet lich 7
    ngay va form cap tai khoan.
-5. Chot cac cau hoi URS/SRS con mo voi nguoi huong dan: han khoa lich, quy tac
-   hoc bu sau tam ngung, trong so rang buoc mem va schema CSV thuc te.
+5. Ghi nhan bo du lieu goc khong duoc cung cap; dung generator co seed de tao
+   batch tong hop khoang 600 giang vien, 3.000 lop va 150 phong cho stress test.
 6. Tao checklist demo va huong dan khoi dong local/triển khai PostgreSQL,
    khong ghi credential vao repository.
 

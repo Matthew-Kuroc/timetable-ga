@@ -226,6 +226,8 @@ frontend/tsconfig.tsbuildinfo
 frontend/test-results/
 
 # Local-only progress artifacts (do not publish to GitHub)
+.tmp/
+chốt tài liệu.txt
 build_week*_report.py
 docs/reports/*.docx
 docs/reports/*.md

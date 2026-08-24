@@ -14,6 +14,13 @@ running GA. Each confirmed batch must be versioned or snapshotted so a later
 upload cannot alter a previous GA run. `data/samples/official` is only a
 development and demonstration fixture, never the normal runtime input source.
 
+The university source dataset is not available because it cannot be disclosed.
+For scale testing, the supervisor has approved a reproducible synthetic batch
+with approximately 600 lecturers, 3,000 course sections and 150 rooms. This
+batch must preserve all seven-file references and validation rules, must not
+contain real personal data, and must be labelled as synthetic rather than as a
+production university extract.
+
 ### Confirmed-batch metadata
 
 Before confirming a valid seven-file batch, the Training Office may enter a
@@ -81,8 +88,8 @@ Valid slot ranges:
 | Course type | Valid period ranges |
 | --- | --- |
 | `THEORY` | `1-3`, `4-6`, `7-9`, `10-12`, `13-15` |
-| `PRACTICE` | `1-5`, `1-6`, `2-6` |
-| `INTEGRATED` | `1-5`, `1-6`, `2-6` |
+| `PRACTICE` | One-meeting ranges `1-5`, `1-6`, `2-6`; a declared multi-meeting component may use an explicitly configured two- or three-period range within one teaching block. |
+| `INTEGRATED` | One-meeting ranges `1-5`, `1-6`, `2-6`; a declared multi-meeting component may use an explicitly configured two- or three-period range within one teaching block. |
 
 Saturday and Sunday are valid teaching days when configured. An evening,
 Saturday, or Sunday slot may receive a configurable soft avoidance cost during
@@ -98,9 +105,10 @@ Teaching assignments are fixed input data. The GA does not choose lecturers.
 | `course_name` | string | Yes | Not blank. Vietnamese text is allowed. |
 | `section_code` | string | Yes | Unique within the dataset batch. |
 | `lecturer_code` | string | Yes | Must exist in `lecturers.csv`. |
-| `required_sessions` | integer | Yes | Required number of semester sessions, normally about 15. |
-| `weekly_sessions` | integer | Yes | MVP value is normally `1`. |
-| `periods_per_session` | integer | Yes | `3` for theory, `5` or `6` for practice/integrated. |
+| `required_sessions` | integer | Yes | Required total dated meetings for the semester, normally about 15 for one weekly meeting and about 30 for two. |
+| `weekly_sessions` | integer | Yes | `1` or `2`; `2` is allowed only for an explicitly declared `PRACTICE`/`INTEGRATED` section in the current MVP extension. |
+| `periods_per_session` | integer | Yes | Period count of meeting 1 or the only meeting: `3` for theory, `5`/`6` for a continuous practice/integrated meeting, or normally `3` for the first component of a split load. |
+| `second_session_periods` | integer | Conditional | Blank when `weekly_sessions=1`; required when `weekly_sessions=2`, normally `2` for a five-period `3+2` load or `3` for a six-period `3+3` load. |
 | `expected_students` | integer | Yes | Greater than 0. |
 | `initial_registration_limit` | integer | No | Greater than 0 when present. |
 | `approved_max_students` | integer | No | Greater than 0 when present. |
@@ -111,6 +119,25 @@ Teaching assignments are fixed input data. The GA does not choose lecturers.
 | `end_date` | date | Yes | ISO date `YYYY-MM-DD`. |
 | `campus_code` | string | No | Optional. No travel-time constraint is added. |
 | `notes` | string | No | Optional business note. |
+
+### Multi-meeting decision recorded on 23/08/2026
+
+Most course sections continue to use one regular meeting per week. Some
+`PRACTICE` or `INTEGRATED` sections may declare two meetings. A five-period
+load is normally `3+2`; a six-period load may be `3+3`. For example, one
+integrated section may meet Monday periods 10-12 and Thursday periods 7-9.
+
+Both meetings remain the same course section and course type. An `INTEGRATED`
+section is not split into separate theory and practice rows; the lecturer
+decides how to teach both activities. The GA schedules only the declared
+meeting durations and does not decide to split a course.
+
+The seven-file batch is preserved. `periods_per_session` describes meeting 1,
+and `second_session_periods` describes meeting 2. Normalization derives stable
+identities `(section_code, meeting_number)` with meeting numbers `1` and `2`.
+There is no minimum day gap: consecutive-day meetings are valid. Each meeting
+becomes one base GA gene; dated occurrences are still generated afterward and
+must never become independent GA genes.
 
 Capacity priority:
 
@@ -155,3 +182,7 @@ The GA creates a base weekly timetable before student registration. Academic cal
 | `note` | string | No | Optional note. |
 
 When a regular class date falls on a holiday or non-teaching day, the system must not generate a normal occurrence and must not automatically move it to another date.
+
+The calendar batch must also contain configured valid teaching dates for
+academic weeks 16-18 when those weeks may be used for make-up sessions. Week 19
+and later are outside the current make-up window.

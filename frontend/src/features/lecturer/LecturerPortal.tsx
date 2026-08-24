@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { LecturerRequestCreatePage } from "../lecturer-requests/LecturerRequestCreatePage";
 import { LecturerRequestHistoryPage } from "../lecturer-requests/LecturerRequestHistoryPage";
@@ -63,44 +63,74 @@ export function LecturerPortal({ user, path, onNavigate, onLogout }: LecturerPor
 }
 
 function weekDateRange(data: LecturerTimetable | null, week: number): string {
-  const occs = (data?.occurrences || []).filter((o) => o.academic_week === week);
-  if (occs.length) {
-    const dates = occs.map((o) => o.date.slice(0, 10)).sort();
-    const first = new Date(`${dates[0]}T00:00:00`);
-    const last = new Date(`${dates[dates.length - 1]}T00:00:00`);
+  const weekStart = timetableWeekStart(data, week);
+  if (weekStart) {
+    const first = new Date(`${weekStart}T00:00:00`);
+    const last = new Date(first);
+    last.setDate(first.getDate() + 6);
     const fmt = (d: Date) => new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(d);
     return `${fmt(first)} – ${fmt(last)}`;
   }
   return "";
 }
 
+function timetableWeekStart(data: LecturerTimetable | null, week: number): string | null {
+  const explicit = data?.academic_week === week ? data?.week_start_date?.slice(0, 10) : undefined;
+  const fallback = (data?.occurrences || [])
+    .filter((item) => item.academic_week === week)
+    .map((item) => item.date.slice(0, 10))
+    .sort()[0];
+  const source = explicit || fallback;
+  if (!source) return null;
+  const date = new Date(`${source}T00:00:00`);
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return localDateKey(date);
+}
+
 // Self-contained: owns week + data state so parent never re-renders on week change
 function WeeklyTimetable() {
   const [week, setWeek] = useState(1);
+  const [displayWeekStart, setDisplayWeekStart] = useState(() => mondayOf(localDateKey(new Date())));
+  const [selectedDate, setSelectedDate] = useState(() => localDateKey(new Date()));
   const [data, setData] = useState<LecturerTimetable | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (w: number) => {
     setLoading(true); setError(null);
-    try { setData(await api.lecturerTimetable(w)); }
+    try { setData(await api.lecturerTimetable(w, selectedDate)); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể tải lịch giảng dạy."); }
     finally { setLoading(false); }
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => { void load(week); }, [load, week]);
 
-  const onWeekChange = useCallback((w: number) => setWeek(Math.min(53, Math.max(1, w))), []);
+  useEffect(() => {
+    const fromApi = timetableWeekStart(data, week);
+    if (fromApi && (data?.occurrences?.length || data?.week_start_date)) setDisplayWeekStart(fromApi);
+  }, [data, week]);
+
+  const onWeekChange = useCallback((nextWeek: number, explicitStart?: string) => {
+    const target = Math.min(53, Math.max(1, nextWeek));
+    setDisplayWeekStart((current) => explicitStart || addDays(current, (target - week) * 7));
+    setWeek(target);
+  }, [week]);
+
+  const moveByWeek = useCallback((offset: number) => {
+    const nextStart = addDays(displayWeekStart, offset * 7);
+    setSelectedDate(nextStart);
+    onWeekChange(Math.min(53, Math.max(1, week + offset)), nextStart);
+  }, [displayWeekStart, onWeekChange, week]);
 
   // Accumulate ALL occurrence dates + their academic_week seen across all week loads
   // so the calendar picker always knows the correct week to load when any date is clicked.
   const [allDates, setAllDates] = useState<Set<string>>(new Set());
   const [dateWeekMap, setDateWeekMap] = useState<Map<string, number>>(new Map());
   useEffect(() => {
-    if (data?.occurrences?.length) {
+    if (data?.teaching_dates?.length || data?.occurrences?.length) {
       setAllDates((prev) => {
         const next = new Set(prev);
-        data.occurrences.forEach((o) => next.add(o.date.slice(0, 10)));
+        (data.teaching_dates || data.occurrences.map((o) => o.date)).forEach((value) => next.add(value.slice(0, 10)));
         return next.size === prev.size ? prev : next;
       });
       setDateWeekMap((prev) => {
@@ -115,7 +145,6 @@ function WeeklyTimetable() {
     }
   }, [data]);
 
-  const [selectedDate, setSelectedDate] = useState("");
   useEffect(() => {
     if (!selectedDate && data?.occurrences?.[0]?.date) setSelectedDate(data.occurrences[0].date.slice(0, 10));
   }, [data, selectedDate]);
@@ -151,60 +180,52 @@ function WeeklyTimetable() {
     return counts;
   }, [data]);
 
-  const dateRange = weekDateRange(data, week);
-
   return <>
     {/* === Week navigation bar === */}
     <section className="wt-nav-bar panel">
       <div className="wt-nav-left">
-        <span className="wt-week-badge">Tuần {week}</span>
+
         <div>
-          <div className="wt-week-range">{dateRange || (data?.official_code ? data.official_code : "Chưa có lịch")}</div>
-          {data?.official_code && <div className="wt-official-code">{data.official_code}</div>}
+          <div className="wt-week-range">{data?.week_start_date && data.week_end_date ? `${formatDate(data.week_start_date)} – ${formatDate(data.week_end_date)}` : "Đang tải ngày tuần..."}</div>
         </div>
       </div>
       <div className="wt-nav-actions">
-        <button type="button" className="wt-nav-btn" disabled={week <= 1} onClick={() => onWeekChange(Math.max(1, week - 1))} aria-label="Tuần trước">
+        <button type="button" className="wt-nav-btn" onClick={() => moveByWeek(-1)} aria-label="Tuần trước">
           ‹ Trước
         </button>
-        <button type="button" className="wt-today-btn secondary" onClick={() => { const today = localDateKey(new Date()); const match = data?.occurrences.find((o) => o.date.slice(0, 10) === today); onWeekChange(match?.academic_week || isoWeek(today)); }}>
+        <button type="button" className="wt-today-btn secondary" onClick={() => {
+          const today = localDateKey(new Date());
+          const match = data?.occurrences.find((o) => o.date.slice(0, 10) === today);
+          setSelectedDate(today);
+          setDisplayWeekStart(mondayOf(today));
+          onWeekChange(match?.academic_week || dateWeekMap.get(today) || week, mondayOf(today));
+        }}>
           Hôm nay
         </button>
-        <button type="button" className="wt-nav-btn" disabled={week >= 53} onClick={() => onWeekChange(Math.min(53, week + 1))} aria-label="Tuần sau">
+        <button type="button" className="wt-nav-btn" onClick={() => moveByWeek(1)} aria-label="Tuần sau">
           Tiếp ›
         </button>
       </div>
     </section>
 
-    <EnhancedCalendarPicker data={data} allDates={allDates} dateWeekMap={dateWeekMap} onWeekChange={onWeekChange} />
+    <EnhancedCalendarPicker data={data} allDates={allDates} dateWeekMap={dateWeekMap} selectedDate={selectedDate} onDateSelected={setSelectedDate} onWeekChange={onWeekChange} />
     <section className="week-date-picker legacy-date-picker" aria-label="Chọn ngày trong lịch">
-      <label>Chọn ngày<input aria-label="Chọn ngày" type="date" value={selectedDate} onChange={(event) => { const value = event.target.value; setSelectedDate(value); const match = data?.occurrences.find((item) => item.date.slice(0, 10) === value); onWeekChange(match?.academic_week || isoWeek(value)); }} /></label>
+      <label>Chọn ngày<input aria-label="Chọn ngày" type="date" value={selectedDate} onChange={(event) => { const value = event.target.value; setSelectedDate(value); const match = data?.occurrences.find((item) => item.date.slice(0, 10) === value); onWeekChange(match?.academic_week || dateWeekMap.get(value) || isoWeek(value), mondayOf(value)); }} /></label>
       <span className="field-help">Chọn ngày để chuyển nhanh đến tuần tương ứng.</span>
     </section>
 
-    {loading ? (
+    {loading && !data ? (
       <p className="empty" role="status">Đang tải lịch giảng dạy...</p>
-    ) : !data?.occurrences.length ? (
-      <p className="empty">Giảng viên chưa có lịch trong tuần này.</p>
     ) : (
+      <>
       <section className="wt-grid" aria-label={`Lịch giảng dạy tuần ${week}`}>
         {/* Header row: Ca học | Mon … Sun */}
         <div className="wt-header-cell wt-slot-label-header">Ca học</div>
         {days.map((day) => {
           const cnt = countByDay.get(day.code) || 0;
-          // Derive the calendar date for this column from any known occurrence in the week.
-          // dayCode 2=Mon..8=Sun; getDay() 0=Sun,1=Mon..6=Sat
-          const anyDate = data?.occurrences?.[0]?.date?.slice(0, 10);
-          let dayDate: string | null = null;
-          if (anyDate) {
-            const ref = new Date(`${anyDate}T00:00:00`);
-            // getDay(): 0=Sun,1=Mon..6=Sat; dayCode: 2=Mon..8=Sun
-            const refDayCode = ref.getDay() === 0 ? 8 : ref.getDay() + 1;
-            const diff = day.code - refDayCode;
-            const target = new Date(ref);
-            target.setDate(ref.getDate() + diff);
-            dayDate = localDateKey(target);
-          }
+          const weekStartValue = data?.week_start_date || "";
+          const weekStart = weekStartValue ? new Date(`${weekStartValue}T00:00:00`) : null;
+          const dayDate = weekStart ? (() => { const target = new Date(weekStart); target.setDate(weekStart.getDate() + day.code - 2); return localDateKey(target); })() : null;
           return (
             <div className="wt-header-cell wt-day-header" key={day.code}>
               <span className="wt-day-name">{day.label}</span>
@@ -235,20 +256,39 @@ function WeeklyTimetable() {
           </>
         ))}
       </section>
+      {!data?.occurrences.length && <p className="empty wt-empty-week">Giảng viên chưa có lịch dạy trong tuần này.</p>}
+      </>
     )}
   </>;
 }
 
-function EnhancedCalendarPicker({ data, allDates, dateWeekMap, onWeekChange }: { data: LecturerTimetable | null; allDates: Set<string>; dateWeekMap: Map<string, number>; onWeekChange: (week: number) => void }) {
-  const initial = data?.occurrences?.[0]?.date?.slice(0, 10) || localDateKey(new Date());
+function EnhancedCalendarPicker({ data, allDates, dateWeekMap, selectedDate: externalSelectedDate, onDateSelected, onWeekChange }: { data: LecturerTimetable | null; allDates: Set<string>; dateWeekMap: Map<string, number>; selectedDate?: string; onDateSelected: (value: string) => void; onWeekChange: (week: number, explicitStart?: string) => void }) {
+  const initial = data?.week_start_date?.slice(0, 10) || data?.occurrences?.[0]?.date?.slice(0, 10) || localDateKey(new Date());
   const [selected, setSelected] = useState(initial);
   const [month, setMonth] = useState(() => new Date(`${initial}T00:00:00`));
   const [open, setOpen] = useState(false);
+  const pickerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeWhenOutside = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && pickerRef.current && !pickerRef.current.contains(target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeWhenOutside);
+    return () => document.removeEventListener("pointerdown", closeWhenOutside);
+  }, [open]);
+
+  useEffect(() => {
+    if (!externalSelectedDate) return;
+    setSelected(externalSelectedDate);
+    setMonth(new Date(`${externalSelectedDate}T00:00:00`));
+  }, [externalSelectedDate]);
 
   // When the loaded week changes (data prop updates), jump the picker to Monday of that week.
   // Use local date parts to avoid the UTC+7 timezone shift from toISOString().
   useEffect(() => {
-    const firstDate = data?.occurrences?.[0]?.date?.slice(0, 10);
+    const firstDate = data?.week_start_date?.slice(0, 10) || data?.occurrences?.[0]?.date?.slice(0, 10);
     if (!firstDate) return;
     const d = new Date(`${firstDate}T00:00:00`);
     const dayOfWeek = d.getDay(); // 0=Sun
@@ -264,15 +304,17 @@ function EnhancedCalendarPicker({ data, allDates, dateWeekMap, onWeekChange }: {
   const choose = (value: string) => {
     setSelected(value);
     setOpen(false);
-    // Priority: 1) match in current data, 2) dateWeekMap from any visited week, 3) ISO week fallback
+    onDateSelected(value);
+    // Keep the academic week when selecting one of its dates, even when it has no lecturer sessions.
     const match = data?.occurrences.find((item) => item.date.slice(0, 10) === value);
-    const academicWeek = match?.academic_week ?? dateWeekMap.get(value) ?? isoWeek(value);
-    onWeekChange(academicWeek);
+    const inCurrentWeek = Boolean(data?.week_start_date && data?.week_end_date && value >= data.week_start_date.slice(0, 10) && value <= data.week_end_date.slice(0, 10));
+    const academicWeek = (inCurrentWeek ? data?.academic_week : undefined) ?? match?.academic_week ?? dateWeekMap.get(value) ?? isoWeek(value);
+    onWeekChange(academicWeek, mondayOf(value));
   };
   const years = Array.from({ length: 11 }, (_, index) => new Date().getFullYear() - 5 + index);
   const MONTHS = ["Tháng 1","Tháng 2","Tháng 3","Tháng 4","Tháng 5","Tháng 6","Tháng 7","Tháng 8","Tháng 9","Tháng 10","Tháng 11","Tháng 12"];
   return (
-    <section className="compact-calendar-picker">
+    <section className="compact-calendar-picker" ref={pickerRef}>
       <button type="button" className="compact-calendar-trigger" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         <span className="calendar-icon">▦</span>
         <span><small>Đang xem tuần</small><strong>{formatDate(selected)}</strong></span>
@@ -339,6 +381,18 @@ function localDateKey(value: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+function mondayOf(value: string): string {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return localDateKey(date);
+}
+
+function addDays(value: string, days: number): string {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return localDateKey(date);
+}
+
 function monthLabel(value: Date) {
   return new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric" }).format(value);
 }
@@ -362,7 +416,6 @@ function SessionCard({ item }: { item: LecturerTimetableOccurrence }) {
       </div>
       <span className="sc-code">{item.section_code}{item.course_code ? ` · ${item.course_code}` : ""}</span>
       <div className="sc-meta">
-        <span className="sc-meta-item"><span className="sc-meta-label">Ngày</span> {formatDate(item.date)}</span>
         <span className="sc-meta-item"><span className="sc-meta-label">Tiết</span> {periodLabel(item)}</span>
         <span className="sc-meta-item"><span className="sc-meta-label">Phòng</span> {item.room_code || "Chưa xếp"}</span>
       </div>
@@ -420,8 +473,12 @@ function AssignedSections({ sections }: { sections: LecturerCourseSection[] }) {
                 <dd>{section.day_of_week ? `${dayLabel(section.day_of_week)}, ${periodLabel(section)}` : "Chưa có lịch"}</dd>
               </div>
               <div className="cs-info-item">
-                <dt>Phòng học</dt>
-                <dd>{section.room_code || "Chưa xếp"}</dd>
+                <dt>Mã lớp học phần</dt>
+                <dd>{section.section_code}</dd>
+              </div>
+              <div className="cs-info-item cs-date-item">
+                <dt>Thời gian giảng dạy</dt>
+                <dd>{section.start_date && section.end_date ? `${formatDate(section.start_date)} – ${formatDate(section.end_date)}` : "Chưa có dữ liệu"}</dd>
               </div>
               <div className="cs-info-item">
                 <dt>Số buổi yêu cầu</dt>

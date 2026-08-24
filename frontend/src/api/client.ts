@@ -136,7 +136,7 @@ export const api = {
   auditLogs: (params: { limit?: number; offset?: number }) =>
     request<{ audit_logs: AuditLog[]; total: number }>(`/api/admin/audit-logs${query(params)}`),
 
-  lecturerTimetable: (week: number) => request<LecturerTimetable>(`/api/lecturer/timetable${query({ week })}`),
+  lecturerTimetable: (week: number, selected_date?: string) => request<LecturerTimetable>(`/api/lecturer/timetable${query({ week, selected_date })}`),
   lecturerChangeRequests: () => request<ChangeRequestListResponse>("/api/lecturer/change-requests"),
   lecturerChangeRequest: (requestCode: string) =>
     request<LecturerChangeRequest>(`/api/lecturer/change-requests/${encodeURIComponent(requestCode)}`),
@@ -188,7 +188,7 @@ export const api = {
     form.append("note", metadata.note);
     return request<{ batch: Batch }>("/api/imports/csv/confirm", { method: "POST", body: form });
   },
-  startRun: (body: Record<string, number | string>) => jsonRequest<Run>("/api/ga/runs/preview", "POST", body),
+  startRun: (body: Record<string, unknown>) => jsonRequest<Run>("/api/ga/runs/preview", "POST", body),
   adjustmentOptions: async (runCode: string, sectionCode: string, date: string) => {
     const result = await request<{ slots: AdjustmentSlot[] }>(`/api/ga/runs/${encodeURIComponent(runCode)}/occurrence-adjustment-options/${encodeURIComponent(sectionCode)}/${date}?target_date=${date}`);
     return result.slots;

@@ -7,9 +7,10 @@
 | Project | Teaching Timetable Scheduling Application Using Genetic Algorithm |
 | Document | User Requirements Specification (URS) |
 | Source file | `D:\DoAn\DuAn\TaiLieu_UR.docx` |
-| Version | 0.2 draft |
+| Version | 0.3 draft |
 | Created | 09/07/2026 |
-| Status | Draft; three-role expansion recorded, pending supervisor review and confirmation |
+| Updated | 23/08/2026 |
+| Status | Draft; MVP business decisions confirmed by the project owner, final delivery/demo pending supervisor confirmation |
 
 ## 2. Purpose
 
@@ -119,19 +120,25 @@ The system is needed because manual scheduling becomes time-consuming and diffic
 
 ## 9. User Requirements
 
-Priority values: Must, Should, Could. Status values: Identified, Team proposal, Needs supervisor confirmation.
+Priority values: Must, Should, Could. Status values: Identified, Team proposal,
+Confirmed for MVP, Needs supervisor confirmation.
 
 ### 9.1 Authentication and Authorization
 
 | Code | Requirement | Priority | Status |
 | --- | --- | --- | --- |
 | UR-AUTH-01 | Users need to log in with a valid account before accessing protected features. | Must | Identified |
-| UR-AUTH-02 | The system must support three roles: Administrator, Training Office and Lecturer, with separate permissions and navigation. | Must | Needs supervisor confirmation |
+| UR-AUTH-02 | The system must support three roles: Administrator, Training Office and Lecturer, with separate permissions and navigation. The MVP allows one Administrator, one Training Office account and multiple Lecturer accounts, with exactly one role per account. | Must | Confirmed for MVP 23/08/2026 |
 | UR-AUTH-03 | Administrators need to create, update, activate/deactivate and assign roles to approved user accounts. | Must | Team proposal |
 | UR-AUTH-04 | The system must reject students, unprovisioned accounts and outside users; there is no public self-registration. | Must | Team proposal |
 | UR-AUTH-05 | Lecturers may only view their personal timetable and operate on classes assigned to them. | Must | Identified |
 | UR-AUTH-06 | Lecturers must not directly add classes, delete classes, reject classes or edit timetable data. | Must | Identified |
 | UR-AUTH-07 | Users need to log out and end a session safely. | Must | Team proposal |
+| UR-AUTH-08 | Administrator needs to provision Lecturer accounts in bulk from a confirmed lecturer catalog, for selected lecturer codes or the complete batch. Importing lecturer rows alone must not create accounts. | Must | Confirmed for MVP 24/08/2026 |
+| UR-AUTH-09 | Each bulk-provisioned Lecturer account must receive a unique random temporary password. The database stores only its hash; a local ignored handoff file may expose the temporary value once to the Administrator. A shared default password is forbidden. | Must | Confirmed for MVP 24/08/2026 |
+| UR-AUTH-10 | A user signing in with a temporary password must replace it before accessing the normal role portal. | Must | Confirmed for MVP 24/08/2026 |
+| UR-AUTH-11 | Administrator needs to issue a new temporary password when a Lecturer loses access. Reset revokes existing sessions, requires another first-login password change and creates an audit event; the old password cannot be viewed or recovered. | Must | Confirmed for MVP 24/08/2026 |
+| UR-AUTH-12 | An authenticated user needs to change their own password after supplying the current password. There remains no public or self-service forgotten-password workflow. | Must | Confirmed for MVP 24/08/2026 |
 
 ### 9.2 Data Import and Management
 
@@ -151,7 +158,7 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 | Code | Requirement | Priority | Status |
 | --- | --- | --- | --- |
 | UR-GA-01 | Training Department needs to configure population size, number of generations, crossover rate and mutation rate. | Must | Identified |
-| UR-GA-02 | Training Department needs to configure priorities or weights for soft constraints, including avoidance of evening, Saturday and Sunday slots. | Must | Clarified from internship topic |
+| UR-GA-02 | Training Department needs to configure priorities or weights for soft constraints, including avoidance of evening, Saturday and Sunday slots. The accepted baseline is documented in the SRS and stored with each run. | Must | Confirmed for MVP 23/08/2026 |
 | UR-GA-03 | The system may run only when required data is available and must show missing data reasons. | Must | Identified |
 | UR-GA-04 | The system needs to generate a timetable option or report failure with a reason. | Must | Identified |
 | UR-GA-05 | Users need to know whether a run is pending, running, completed, failed or stopped. | Must | Identified |
@@ -177,7 +184,7 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 | Code | Requirement | Priority | Status |
 | --- | --- | --- | --- |
 | UR-REQ-01 | Lecturers need to request suspension or movement of one assigned session. | Must | Identified |
-| UR-REQ-02 | Before the lock deadline, lecturers need to request moving the fixed timetable of a whole course section. | Must | Needs supervisor confirmation |
+| UR-REQ-02 | A whole recurring day/time change is allowed only before the timetable is officially published for student registration. After publication, a long-term facility problem may be handled by an audited room-only segment that preserves the day and time slot. | Must | Confirmed for MVP 23/08/2026 |
 | UR-REQ-03 | A request needs to record section, affected session/timetable, request type, reason and proposed option if any. | Must | Team proposal |
 | UR-REQ-04 | A submitted request must not change the official timetable until processing is complete. | Must | Needs supervisor confirmation |
 | UR-REQ-05 | Training Department needs to view details, check conflicts, approve or reject requests. | Must | Needs supervisor confirmation |
@@ -194,6 +201,7 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 | UR-EXP-01 | Training Department needs to export the timetable to CSV. | Must | Identified |
 | UR-EXP-02 | Training Department needs to export the timetable to Excel `.xlsx`. | Must | Identified |
 | UR-EXP-03 | Users should choose export scope: full option, lecturer, room or course section. | Should | Team proposal |
+| UR-EXP-04 | Dated CSV/XLSX exports use `DD-MM-YYYY`, CSV uses UTF-8 BOM, and the filename contains batch name, run/official code and timestamp. | Should | Confirmed for MVP 23/08/2026 |
 | UR-AUD-01 | Each run should store input data, configuration, time, result and evaluation metrics. | Should | Team proposal |
 | UR-AUD-02 | Training Department should view previous runs without losing the current selected option. | Should | Team proposal |
 | UR-DEL-01 | Delivery package needs source code, installation guide, sample data, report, experiment results and demo video. | Must | Identified |
@@ -211,7 +219,14 @@ Priority values: Must, Should, Could. Status values: Identified, Team proposal, 
 - A lecturer must not be scheduled in an officially confirmed fixed restriction. Lecturer self-declared unavailable or undesired times before course registration are treated as soft preferences unless confirmed by the Training Department.
 - A room must not be scheduled in an unavailable slot.
 - Every session must have a course section, lecturer, room and time slot.
-- Sessions must stay within allowed teaching weeks.
+- Regular sessions must stay within the course section's normal teaching dates.
+- A suspended regular occurrence counts as one missing required session.
+- A manually arranged make-up session may be scheduled on a valid teaching
+  date in academic week 16, 17 or 18 even when the regular course section ends
+  after week 15. Academic week 19 and later are outside the current make-up
+  window because they are reserved for process-mark entry.
+- Every make-up session must still pass lecturer, room, capacity, room-type,
+  configured-slot and fixed-restriction validation.
 - Timetable change requests may be applied only after approval and must not introduce new hard-constraint violations.
 
 ### 10.2 Soft Constraints
@@ -240,7 +255,7 @@ The SRS draft marks this rule as clarified, while the UR draft still lists it as
 
 | Group | Description |
 | --- | --- |
-| Course sections | Course code/name, section code, lecturer, number of sessions, periods per session, student counts, type, weeks and optional campus/notes. |
+| Course sections | Course code/name, section code, lecturer, number of sessions, weekly meeting count, periods per meeting, student counts, type, weeks and optional campus/notes. The input, not the GA, declares whether a section has more than one weekly meeting. |
 | Rooms | Room code/name, capacity, room type, campus, availability and unavailable slots. |
 | Time slots | Slot code, day of week, start period, end period, session type and active flag. |
 | Lecturers | Lecturer code/name, preferred slots, undesired slots and optional workload preferences. Officially confirmed fixed restrictions may be recorded separately by the Training Department. |
@@ -282,17 +297,76 @@ The SRS draft marks this rule as clarified, while the UR draft still lists it as
 - Lecturer can use a weekly calendar, view assigned sessions and submit a timetable-change request.
 - Experiment metrics can be collected for at least small and medium datasets.
 
-## 15. Confirmation Checklist
+## 15. Project Decisions Recorded on 23/08/2026
 
-- [ ] At least one real sample dataset has been received and checked.
+These decisions were supplied by the project owner for the internship MVP and
+are recorded so later implementation sessions do not invent a different rule.
+They remain part of the draft until the supervisor signs off the final URS/SRS.
+
+- A suspension caused by lecturer absence, an unexpected conflict or a missed
+  class creates one missing required session.
+- Lecturer and Training Department coordinate the replacement outside the
+  automatic scheduler; the Training Department records the make-up session in
+  the application after hard-constraint validation.
+- A section with 15 regular teaching weeks may use academic weeks 16-18 for
+  make-up teaching. Week 19 and later are not allowed under the current rule.
+- No real university CSV was supplied. The team-defined seven-file schema and
+  anonymized fixtures are the approved MVP input contract, but are not claimed
+  to be a production integration format.
+- Most course sections have one weekly meeting. A `PRACTICE` or `INTEGRATED`
+  section may have two weekly meetings when this is explicitly declared in the
+  final input. A three-period `THEORY` section normally remains one weekly
+  meeting. The GA must schedule declared meetings and must not decide to split
+  a course by itself.
+- Example: an integrated NoSQL section may have one three-period meeting on
+  Monday periods 10-12 and a second three-period meeting on Thursday periods
+  7-9. A five-period section is normally split `3+2`. These meetings remain
+  entries of the same `INTEGRATED` section, not separate theory/practice parts.
+- Two declared weekly meetings have no minimum spacing requirement and may be
+  scheduled on consecutive days.
+- The seven-file schema uses `weekly_sessions`, `periods_per_session` for the
+  first/only meeting, and optional `second_session_periods`. The system derives
+  stable meeting numbers `1` and `2`.
+- Whole-recurring day/time changes are locked when the official timetable is
+  published for student registration. A long-term room failure may create an
+  audited room-only segment with the same day and slot.
+- The accepted baseline soft weights are: lecturer preferences `10`, room
+  waste `1`, large-hall use `25`, gaps `4`, scattered days `8`, excess
+  consecutive sessions `6`, and evening/weekend avoidance `5`.
+- The account policy is one role per account, exactly one Administrator, one
+  Training Office account, and multiple Lecturer accounts. There is no public
+  registration or password-reset workflow in the MVP.
+- Dated CSV/XLSX exports use `DD-MM-YYYY`; CSV uses UTF-8 BOM and filenames use
+  batch name, run/official code and timestamp.
+- The performance target is 100-200 sections at the default population `80`
+  and generation limit `200`, completing or preserving the best candidate
+  within 10 minutes on the recorded reference machine. A publishable result
+  must have zero hard violations.
+- Because the university cannot disclose its source data, the supervisor has
+  approved a fully synthetic scale-test batch with approximately 600 lecturers,
+  3,000 course sections and 150 rooms. It must use the project-defined seven
+  CSV files, contain no real personal data and remain clearly labelled as
+  synthetic. This stress dataset does not replace the 100-200-section MVP
+  performance acceptance target.
+
+## 16. Confirmation Checklist
+
+- [ ] At least one real sample dataset has been received and checked. No real
+  dataset is available; the team-defined schema is the MVP fallback.
 - [ ] Room-capacity rule has been confirmed in the final URS/SRS.
 - [ ] Request - approval - apply-change workflow has been confirmed.
-- [ ] Deadline for moving a whole recurring schedule has been confirmed.
-- [ ] Practical-class, multi-session and special-week rules have been confirmed.
-- [ ] Initial soft constraints and weights have been confirmed.
-- [ ] Dataset scale and run-time criteria have been confirmed.
-- [ ] Export file format has been confirmed.
-- [ ] Three-role permission matrix and account-provisioning policy have been confirmed.
+- [x] Deadline and room-only exception for the recurring schedule have been confirmed for the MVP.
+- [x] Practical/integrated multi-meeting fields and week 16-18 make-up window have been confirmed for the MVP.
+- [x] Initial soft constraints and weights have been confirmed for the MVP.
+- [x] Dataset scale and run-time criteria have been confirmed for the MVP.
+- [x] A synthetic university-scale stress dataset (about 600 lecturers, 3,000
+  sections and 150 rooms) is approved because real university data cannot be
+  disclosed.
+- [x] Export file format has been confirmed for the MVP.
+- [x] Three-role permission matrix and account-provisioning policy have been confirmed for the MVP.
+- [x] Bulk Lecturer provisioning, unique one-time temporary passwords,
+  mandatory first-login password change and Administrator-issued Lecturer
+  password reset have been confirmed for the MVP.
 - [ ] Lecturer calendar layout and supported week/session interactions have been confirmed.
 - [ ] Demo and delivery requirements have been confirmed.
 - [ ] Conclusions have been updated into URS 1.0 and SRS 1.0.

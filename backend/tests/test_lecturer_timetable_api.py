@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from backend.app.db.models import GaRunModel, OfficialTimetableModel, TimeSlotModel
+from backend.app.db.models import AcademicCalendarDateModel, GaRunModel, OfficialTimetableModel, TimeSlotModel
 from backend.app.db.session import get_session_local
 from backend.app.domain.auth import UserRole
 from backend.tests.auth_helpers import authenticated_client
@@ -56,6 +56,7 @@ def test_lecturer_sees_only_owned_occurrences_with_effective_slot_details() -> N
                     "start_period": 1,
                     "end_period": 3,
                     "course_type": "THEORY",
+                    "required_sessions": 2,
                 },
                 {
                     "section_code": "SEC-B",
@@ -69,6 +70,7 @@ def test_lecturer_sees_only_owned_occurrences_with_effective_slot_details() -> N
                     "start_period": 1,
                     "end_period": 3,
                     "course_type": "THEORY",
+                    "required_sessions": 2,
                 },
             ],
             "occurrences": [
@@ -90,6 +92,18 @@ def test_lecturer_sees_only_owned_occurrences_with_effective_slot_details() -> N
                 },
             ],
         }
+        session.add_all(
+            [
+                AcademicCalendarDateModel(
+                    date=date(2026, 8, 10) + timedelta(days=offset),
+                    academic_week=1 if offset < 7 else 2,
+                    day_of_week=(date(2026, 8, 10) + timedelta(days=offset)).isoweekday() + 1,
+                    is_teaching_day=True,
+                    is_holiday=False,
+                )
+                for offset in range(14)
+            ]
+        )
         session.add(
             OfficialTimetableModel(
                 official_code="OFFICIAL-OWNERSHIP",
@@ -121,4 +135,18 @@ def test_lecturer_sees_only_owned_occurrences_with_effective_slot_details() -> N
     assert occurrence["start_period"] == 4
     assert occurrence["end_period"] == 6
     assert occurrence["day_of_week"] == date(2026, 8, 10).isoweekday() + 1
+    assert result["week_start_date"] == "2026-08-10"
+    assert result["week_end_date"] == "2026-08-16"
+    assert result["teaching_dates"] == ["2026-08-10"]
+    assert result["course_sections"][0]["required_sessions"] == 2
 
+    empty_week = lecturer.get(
+        "/api/lecturer/timetable",
+        params={"week": 2, "selected_date": "2026-08-19"},
+    )
+    assert empty_week.status_code == 200
+    empty_result = empty_week.json()
+    assert empty_result["academic_week"] == 2
+    assert empty_result["week_start_date"] == "2026-08-17"
+    assert empty_result["week_end_date"] == "2026-08-23"
+    assert empty_result["occurrences"] == []

@@ -22,6 +22,7 @@ COURSE_TYPES = {"THEORY", "PRACTICE", "INTEGRATED"}
 ROOM_TYPES = {"THEORY_ROOM", "COMPUTER_LAB", "SPECIALIZED_LAB"}
 VALID_THEORY_RANGES = {(1, 3), (4, 6), (7, 9), (10, 12), (13, 15)}
 VALID_LONG_RANGES = {(1, 5), (1, 6), (2, 6)}
+VALID_SHORT_COMPONENT_RANGES = {(1, 2), (2, 3), (4, 5), (5, 6), (7, 8), (8, 9), (10, 11), (11, 12), (13, 14), (14, 15)}
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,7 @@ def validate_sample_dataset(directory: str | Path) -> CsvValidationResult:
         calendar_date.date: calendar_date
         for calendar_date in academic_calendar_dates_by_text.values()
     }
+    _validate_makeup_window_dates(academic_calendar_dates.values(), errors)
 
     _validate_references(course_sections.values(), lecturers, "course_sections.csv", errors)
     _validate_sections_have_feasible_local_domains(course_sections.values(), rooms, time_slots, errors)
@@ -173,6 +175,7 @@ _COURSE_SECTION_COLUMNS = {
     "required_room_type",
     "required_sessions",
     "weekly_sessions",
+    "second_session_periods",
     "periods_per_session",
     "expected_students",
     "initial_registration_limit",
@@ -301,7 +304,7 @@ def _parse_time_slot(row: dict[str, str], row_number: int) -> TimeSlot | None:
         return None
     if day < 2 or day > 8 or end < start:
         return None
-    if (start, end) not in VALID_THEORY_RANGES | VALID_LONG_RANGES:
+    if (start, end) not in VALID_THEORY_RANGES | VALID_LONG_RANGES | VALID_SHORT_COMPONENT_RANGES:
         return None
     return TimeSlot(
         slot_code=row["slot_code"],
@@ -330,6 +333,7 @@ def _parse_course_section(
     periods = _required_positive_int("course_sections.csv", row_number, "periods_per_session", row["periods_per_session"])
     required_sessions = _required_positive_int("course_sections.csv", row_number, "required_sessions", row["required_sessions"])
     weekly_sessions = _required_positive_int("course_sections.csv", row_number, "weekly_sessions", row["weekly_sessions"])
+    second_session_periods = _optional_int(row.get("second_session_periods", ""))
     expected_students = _required_positive_int("course_sections.csv", row_number, "expected_students", row["expected_students"])
     initial_limit = _optional_int(row["initial_registration_limit"])
     approved_max = _optional_int(row["approved_max_students"])
@@ -337,6 +341,18 @@ def _parse_course_section(
     start_date = _parse_date(row["start_date"])
     end_date = _parse_date(row["end_date"])
     if periods is None or required_sessions is None or weekly_sessions is None or expected_students is None:
+        return None
+    if weekly_sessions not in {1, 2}:
+        errors.append(_error("course_sections.csv", row_number, "weekly_sessions", str(weekly_sessions), "Số buổi trong tuần chỉ được là 1 hoặc 2"))
+        return None
+    if weekly_sessions == 1 and second_session_periods is not None:
+        errors.append(_error("course_sections.csv", row_number, "second_session_periods", str(second_session_periods), "Không được khai báo buổi thứ hai khi weekly_sessions=1"))
+        return None
+    if weekly_sessions == 2 and course_type == "THEORY":
+        errors.append(_error("course_sections.csv", row_number, "weekly_sessions", str(weekly_sessions), "THEORY chỉ được khai báo một buổi mỗi tuần"))
+        return None
+    if weekly_sessions == 2 and (periods != 3 or second_session_periods not in {2, 3}):
+        errors.append(_error("course_sections.csv", row_number, "periods_per_session/second_session_periods", f"{periods}+{second_session_periods or ''}", "Mẫu nhiều buổi hiện chỉ hỗ trợ 3+2 hoặc 3+3"))
         return None
     if start_date is None or end_date is None or end_date < start_date:
         errors.append(_error("course_sections.csv", row_number, "start_date/end_date", f"{row['start_date']}..{row['end_date']}", "Khoảng ngày của lớp học phần không hợp lệ"))
@@ -366,6 +382,7 @@ def _parse_course_section(
         periods_per_session=periods,
         required_sessions=required_sessions,
         weekly_sessions=weekly_sessions,
+        second_session_periods=second_session_periods,
         expected_students=expected_students,
         initial_registration_limit=initial_limit,
         approved_max_students=approved_max,
@@ -400,6 +417,28 @@ def _parse_academic_calendar_date(
     )
 
 
+def _validate_makeup_window_dates(
+    calendar_dates: Iterable[AcademicCalendarDate],
+    errors: list[CsvValidationError],
+) -> None:
+    available_weeks = {
+        calendar_date.academic_week
+        for calendar_date in calendar_dates
+        if calendar_date.is_teaching_day and not calendar_date.is_holiday
+    }
+    for academic_week in (16, 17, 18):
+        if academic_week not in available_weeks:
+            errors.append(
+                _error(
+                    "academic_calendar.csv",
+                    None,
+                    "academic_week",
+                    str(academic_week),
+                    "Thiếu ngày giảng dạy hợp lệ cho cửa sổ học bù tuần 16-18",
+                )
+            )
+
+
 def _validate_references(
     sections: Iterable[CourseSection],
     lecturers: dict[str, Lecturer],
@@ -429,7 +468,9 @@ def _validate_sections_have_feasible_local_domains(
     available_rooms = [room for room in rooms.values() if room.available]
 
     for section in sections:
-        compatible_slot_exists = any(_slot_supports_section(slot, section) for slot in active_slots)
+        compatible_slot_exists = any(_slot_supports_section(slot, section, 1) for slot in active_slots)
+        if section.weekly_sessions == 2:
+            compatible_slot_exists = compatible_slot_exists and any(_slot_supports_section(slot, section, 2) for slot in active_slots)
         if not compatible_slot_exists:
             errors.append(
                 _error(
@@ -458,12 +499,12 @@ def _validate_sections_have_feasible_local_domains(
             )
 
 
-def _slot_supports_section(slot: TimeSlot, section: CourseSection) -> bool:
+def _slot_supports_section(slot: TimeSlot, section: CourseSection, meeting_number: int = 1) -> bool:
     if section.course_type not in slot.supports_course_types:
         return False
-    if section.course_type == "THEORY":
-        return (slot.start_period, slot.end_period) in VALID_THEORY_RANGES and slot.duration == section.periods_per_session
-    return (slot.start_period, slot.end_period) in VALID_LONG_RANGES and slot.duration == section.periods_per_session
+    periods = section.second_session_periods if meeting_number == 2 else section.periods_per_session
+    valid_ranges = VALID_THEORY_RANGES if section.course_type == "THEORY" else VALID_THEORY_RANGES | VALID_LONG_RANGES | VALID_SHORT_COMPONENT_RANGES
+    return (slot.start_period, slot.end_period) in valid_ranges and slot.duration == periods
 
 
 def _parse_lecturer_time_preferences(
