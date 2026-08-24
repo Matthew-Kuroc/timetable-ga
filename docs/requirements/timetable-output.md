@@ -2,7 +2,10 @@
 
 This document defines output produced by the GA module and consumed by backend APIs, frontend views and export logic.
 
-The MVP GA output is a base weekly assignment per course section. Dated session occurrences are generated later by a calendar-expansion service.
+The GA output contains one base weekly assignment per declared course-section
+meeting. Most sections have one meeting; an explicitly declared
+practice/integrated section may have two. Dated session occurrences are
+generated later by a calendar-expansion service.
 
 ## 1. Base Assignment Fields
 
@@ -10,6 +13,7 @@ The MVP GA output is a base weekly assignment per course section. Dated session 
 | --- | --- | --- | --- |
 | `run_code` | string | Yes | GA run code. |
 | `section_code` | string | Yes | Course-section code. |
+| `meeting_number` | integer | Yes | Stable declared weekly meeting number, `1` or `2`. |
 | `course_code` | string | Yes | Course code. |
 | `course_name` | string | Yes | Course name. |
 | `lecturer_code` | string | Yes | Fixed primary lecturer code. |
@@ -33,6 +37,7 @@ When the academic calendar expands a base assignment into actual dates, each occ
 | --- | --- | --- | --- |
 | `occurrence_id` | string | Yes | Unique generated occurrence ID. |
 | `section_code` | string | Yes | Course-section code. |
+| `meeting_number` | integer | Yes | Base meeting that produced the occurrence. |
 | `date` | date | Yes | Teaching date. |
 | `academic_week` | integer | Yes | Academic week number. |
 | `room_code` | string | Yes | Effective room for this occurrence. |
@@ -86,14 +91,18 @@ The output supports:
 Export endpoints accept optional filters: `lecturer_code`, `room_code`,
 `section_code`, `date_from` and `date_to`. Date filters apply to dated
 occurrences; assignment-only exports remain available when no occurrence
-dates exist. Generated CSV/XLSX filenames contain the run or official code and
-UTC export timestamp so downloaded files can be traced to their source.
+dates exist. Dated CSV/XLSX cells use `DD-MM-YYYY` for Vietnamese spreadsheet
+users, while API dates remain ISO `YYYY-MM-DD`. CSV uses UTF-8 BOM. Generated
+filenames follow
+`<batch-name>-<run-or-official-code>-<timestamp>.<extension>` so downloaded
+files can be traced to their source.
 
 ## 6. Output Validity
 
 A timetable can be selected as valid only when:
 
 - `hard_violation_count` is 0.
-- Every course section has exactly one base assignment in the MVP.
+- Every declared `(section_code, meeting_number)` has exactly one base
+  assignment.
 - Every assignment has section, lecturer, room and active configured slot.
 - All hard constraints pass.

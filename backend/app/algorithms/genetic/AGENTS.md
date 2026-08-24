@@ -50,7 +50,12 @@ The approved scheduling model is:
 - One lecturer may teach multiple course sections.
 - One lecturer may teach multiple sections of the same course.
 - One lecturer may teach different courses in the same semester.
-- Each course section has one regular meeting per week.
+- Most course sections have one regular meeting per week; a validated
+  `PRACTICE` or `INTEGRATED` section may declare two meetings.
+- Five total weekly periods are normally represented as `3+2`; six may be
+  represented as `3+3`. The input declares the pattern.
+- Declared meetings have no mandatory minimum day gap and may occur on
+  consecutive days.
 - Practice classes are not split into student groups.
 - One course section does not have multiple primary lecturers.
 - Teaching assignments are determined before timetable generation.
@@ -95,7 +100,9 @@ Configured theory slots may include:
 
 ### Practice
 
-Practice classes use one five-period or six-period session.
+Practice sections have five or six total weekly periods. They may use one
+continuous meeting or two declared component meetings. Each component uses a
+configured slot matching its duration.
 
 Current valid slots include:
 
@@ -107,8 +114,11 @@ Current valid slots include:
 
 An integrated course section:
 
-- Combines theory and practice in one class.
-- Uses one five-period or six-period session.
+- Combines theory and practice within one course section.
+- Is not split into separate theory and practice schedule entries; the lecturer
+  decides how both activities are delivered.
+- Uses five or six total weekly periods, possibly one continuous meeting or two
+  declared meetings such as `3+2` or `3+3`.
 - Has one primary lecturer.
 - Is processed using practice-length time-slot rules.
 - May require a laboratory, computer room, specialized room, or normal theory
@@ -298,7 +308,8 @@ At minimum, shared scheduling validation must cover:
 
 - A lecturer must not teach overlapping classes.
 - A room must not host overlapping classes.
-- Every course section must receive its required base assignment.
+- Every declared `(section_code, meeting_number)` must receive exactly one base
+  assignment.
 - The selected time slot must be configured and active.
 - The time slot must support the course type and session duration.
 - The room type must satisfy the course-section requirement.
@@ -349,6 +360,11 @@ university buildings. Default evening/weekend avoidance must be configurable
 and must respect the corresponding lecturer preference.
 
 Soft-constraint weights must be configurable.
+
+Use the documented initial experiment baseline unless the caller supplies a
+different non-negative configuration: lecturer preferences `10`, room capacity
+waste `1`, large-room/small-class `25`, schedule gaps `4`, scattered days `8`,
+excess consecutive sessions `6`, and evening/weekend avoidance `5`.
 
 Each soft-constraint evaluator should be independently testable.
 
@@ -501,7 +517,8 @@ For example:
 
 For the MVP:
 
-- The optimization algorithm creates one base weekly assignment.
+- The optimization algorithm creates one base weekly assignment per declared
+  section meeting.
 - The Training Office may create date-range segments manually afterward.
 - Algorithms do not need to generate multiple room segments automatically.
 
@@ -670,7 +687,7 @@ The initial target data is approximately:
 
 - 20 lecturers.
 - 100–200 course sections.
-- About one base assignment per course section.
+- About one base assignment per declared weekly meeting.
 - Approximately 1,500–3,000 dated occurrences after calendar expansion.
 
 Prepare useful indexes before repeated evaluation.
@@ -688,6 +705,11 @@ Avoid repeatedly scanning all rooms, lecturers, and assignments for every small
 operation when an index can be reused safely.
 
 Measure performance before introducing complex caching.
+
+For the recorded reference-machine benchmark, 100–200 sections at default
+population `80` and generation limit `200` should finish or preserve the best
+candidate within 10 minutes. Record seed, runtime, hard violations, soft cost
+and soft breakdown.
 
 Correctness and explainability take priority over premature micro-optimization.
 
@@ -761,6 +783,8 @@ Shared algorithm and constraint tests should cover:
 - Practice with a six-period slot.
 - Integrated class with a five-period slot.
 - Integrated class with a six-period slot.
+- Practice/integrated five-period load declared as `3+2` meetings.
+- Two declared meetings on consecutive days remaining valid.
 - Invalid slot and course-type combination.
 
 ### Algorithm behavior

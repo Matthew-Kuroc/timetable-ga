@@ -139,6 +139,7 @@ def run_ga_preview(request: GaRunRequest) -> dict[str, object]:
         "assignments": [
             {
                 "section_code": assignment.section_code,
+                "meeting_number": assignment.meeting_number,
                 "course_code": data.course_sections[assignment.section_code].course_code,
                 "course_name": data.course_sections[assignment.section_code].course_name,
                 "lecturer_code": data.course_sections[assignment.section_code].lecturer_code,
@@ -151,6 +152,9 @@ def run_ga_preview(request: GaRunRequest) -> dict[str, object]:
                 "course_type": data.course_sections[assignment.section_code].course_type,
                 "required_room_type": data.course_sections[assignment.section_code].required_room_type,
                 "scheduling_student_count": data.course_sections[assignment.section_code].scheduling_student_count,
+                "required_sessions": data.course_sections[assignment.section_code].required_sessions,
+                "periods_per_session": data.course_sections[assignment.section_code].periods_per_session,
+                "second_session_periods": data.course_sections[assignment.section_code].second_session_periods,
             }
             for assignment in sorted(result.best_candidate.assignments, key=lambda item: item.section_code)
         ],
@@ -173,12 +177,13 @@ def run_ga_preview(request: GaRunRequest) -> dict[str, object]:
         "missing_session_count": max(0, sum(section.required_sessions for section in data.course_sections.values()) - len(expansion.occurrences)),
     }
     response["occurrences"] = [
-        {"section_code": item.section_code, "room_code": item.room_code, "slot_code": item.slot_code, "date": item.date.isoformat(), "academic_week": item.academic_week, "status": item.status}
+        {"section_code": item.section_code, "meeting_number": item.meeting_number, "room_code": item.room_code, "slot_code": item.slot_code, "date": item.date.isoformat(), "academic_week": item.academic_week, "status": item.status}
         for item in expansion.occurrences
     ]
     response["skipped_holiday_sessions"] = [
         {
             "section_code": item.section_code,
+            "meeting_number": item.meeting_number,
             "course_code": data.course_sections[item.section_code].course_code,
             "course_name": data.course_sections[item.section_code].course_name,
             "lecturer_code": data.course_sections[item.section_code].lecturer_code,
@@ -318,6 +323,7 @@ class PublishRunRequest(BaseModel):
 
 class OfficialAdjustmentRequest(BaseModel):
     section_code: str
+    meeting_number: int = Field(default=1, ge=1, le=2)
     scope: Literal["ONE_OCCURRENCE", "DATE_RANGE", "FROM_DATE_TO_END"]
     occurrence_date: date | None = None
     effective_start_date: date | None = None
@@ -329,6 +335,7 @@ class OfficialAdjustmentRequest(BaseModel):
 
 class ScheduleSegmentRequest(BaseModel):
     section_code: str
+    meeting_number: int = Field(default=1, ge=1, le=2)
     effective_start_date: date
     effective_end_date: date
     room_code: str
@@ -338,6 +345,7 @@ class ScheduleSegmentRequest(BaseModel):
 
 class MakeupSessionRequest(BaseModel):
     section_code: str
+    meeting_number: int = Field(default=1, ge=1, le=2)
     makeup_date: date
     room_code: str
     slot_code: str
@@ -369,6 +377,11 @@ def adjust_official_timetable(
     official = read_official_timetable(official_code)
     data = _official_input_data(official)
     affected = _select_affected_occurrences(official, request)
+    if request.scope != "ONE_OCCURRENCE" and any(str(item.get("slot_code")) != request.slot_code for item in affected):
+        raise HTTPException(
+            status_code=409,
+            detail="Lịch lặp đã khóa sau khi công bố; phạm vi nhiều buổi chỉ được đổi phòng và phải giữ nguyên thứ, tiết.",
+        )
     _validate_adjustment_input(data, official, request.section_code, request.room_code, request.slot_code, affected)
     room, slot = data.rooms[request.room_code], data.time_slots[request.slot_code]
     previous = [{key: item.get(key) for key in ("date", "room_code", "slot_code", "academic_week", "status")} for item in affected]
@@ -404,6 +417,11 @@ def create_schedule_segment(
     affected = [item for item in official.get("occurrences", []) if item.get("section_code") == request.section_code and request.effective_start_date <= date.fromisoformat(str(item["date"])) <= request.effective_end_date]
     if not affected:
         raise HTTPException(status_code=422, detail="Không có buổi học thường kỳ trong khoảng ngày đã chọn để tạo phân đoạn.")
+    if any(str(item.get("slot_code")) != request.slot_code for item in affected):
+        raise HTTPException(
+            status_code=409,
+            detail="Phân đoạn dài hạn chỉ được đổi phòng; phải giữ nguyên thứ và khung giờ của lịch đã công bố.",
+        )
     _validate_adjustment_input(data, official, request.section_code, request.room_code, request.slot_code, affected)
     segment = request.model_dump(mode="json")
     existing_segments.append(segment)
@@ -429,9 +447,9 @@ def create_makeup_session(
     calendar_date = data.academic_calendar_dates.get(request.makeup_date)
     if section is None or calendar_date is None or not calendar_date.is_teaching_day or calendar_date.is_holiday:
         raise HTTPException(status_code=422, detail="Buổi bù phải thuộc lớp học phần và ngày học hợp lệ trong học kỳ.")
-    if not section.start_date <= request.makeup_date <= section.end_date:
-        raise HTTPException(status_code=422, detail="Ngày học bù phải nằm trong khoảng ngày hiệu lực của lớp học phần.")
-    placeholder = {"section_code": request.section_code, "date": request.makeup_date.isoformat(), "room_code": request.room_code, "slot_code": request.slot_code, "academic_week": calendar_date.academic_week, "status": "MAKEUP"}
+    if not section.start_date <= request.makeup_date <= section.end_date and not 16 <= calendar_date.academic_week <= 18:
+        raise HTTPException(status_code=422, detail="Ngày học bù phải nằm trong khoảng hiệu lực của lớp hoặc cửa sổ học bù tuần 16-18.")
+    placeholder = {"section_code": request.section_code, "meeting_number": request.meeting_number, "date": request.makeup_date.isoformat(), "room_code": request.room_code, "slot_code": request.slot_code, "academic_week": calendar_date.academic_week, "status": "MAKEUP"}
     _validate_adjustment_input(data, official, request.section_code, request.room_code, request.slot_code, [placeholder])
     official.setdefault("occurrences", []).append(placeholder)
     official.setdefault("makeup_sessions", []).append({**placeholder, "original_missing_date": request.original_missing_date.isoformat() if request.original_missing_date else None, "reason": request.reason.strip()})
@@ -455,15 +473,15 @@ def _select_affected_occurrences(official: dict[str, object], request: OfficialA
     if request.scope == "ONE_OCCURRENCE":
         if request.occurrence_date is None:
             raise HTTPException(status_code=422, detail="Phải chọn ngày của buổi học cần điều chỉnh.")
-        affected = [item for item in occurrences if item.get("date") == request.occurrence_date.isoformat()]
+        affected = [item for item in occurrences if item.get("date") == request.occurrence_date.isoformat() and int(item.get("meeting_number") or 1) == request.meeting_number]
     elif request.scope == "DATE_RANGE":
         if request.effective_start_date is None or request.effective_end_date is None or request.effective_end_date < request.effective_start_date:
             raise HTTPException(status_code=422, detail="Khoảng ngày điều chỉnh không hợp lệ.")
-        affected = [item for item in occurrences if request.effective_start_date <= date.fromisoformat(str(item["date"])) <= request.effective_end_date]
+        affected = [item for item in occurrences if request.effective_start_date <= date.fromisoformat(str(item["date"])) <= request.effective_end_date and int(item.get("meeting_number") or 1) == request.meeting_number]
     else:
         if request.effective_start_date is None:
             raise HTTPException(status_code=422, detail="Phải chọn ngày bắt đầu điều chỉnh.")
-        affected = [item for item in occurrences if date.fromisoformat(str(item["date"])) >= request.effective_start_date]
+        affected = [item for item in occurrences if date.fromisoformat(str(item["date"])) >= request.effective_start_date and int(item.get("meeting_number") or 1) == request.meeting_number]
     if not affected:
         raise HTTPException(status_code=404, detail="Không tìm thấy buổi học thường kỳ phù hợp với phạm vi đã chọn.")
     return affected
@@ -475,7 +493,8 @@ def _validate_adjustment_input(data, official: dict[str, object], section_code: 
         raise HTTPException(status_code=404, detail="Không tìm thấy lớp học phần, phòng hoặc khung giờ.")
     if not room.available or room.room_type != section.required_room_type or room.capacity < section.scheduling_student_count:
         raise HTTPException(status_code=422, detail="Phòng không phù hợp với loại lớp hoặc sĩ số.")
-    if not slot.active or section.course_type not in slot.supports_course_types or slot.duration != section.periods_per_session:
+    expected_periods = section.second_session_periods if any(int(item.get("meeting_number") or 1) == 2 for item in affected) else section.periods_per_session
+    if not slot.active or section.course_type not in slot.supports_course_types or slot.duration != expected_periods:
         raise HTTPException(status_code=422, detail="Khung giờ không phù hợp với loại lớp hoặc số tiết.")
     if (room_code, slot_code) in {(item.room_code, item.slot_code) for item in data.room_unavailable_slots}:
         raise HTTPException(status_code=422, detail="Phòng không sử dụng được tại khung giờ đã chọn.")
@@ -484,7 +503,8 @@ def _validate_adjustment_input(data, official: dict[str, object], section_code: 
         raise HTTPException(status_code=422, detail="Khung giờ vi phạm ràng buộc cố định đã xác nhận của giảng viên.")
     for occurrence in affected:
         occurrence_date = date.fromisoformat(str(occurrence["date"]))
-        if not section.start_date <= occurrence_date <= section.end_date:
+        is_valid_makeup_window = occurrence.get("status") == "MAKEUP" and 16 <= int(occurrence.get("academic_week") or 0) <= 18
+        if not section.start_date <= occurrence_date <= section.end_date and not is_valid_makeup_window:
             raise HTTPException(status_code=422, detail="Buổi điều chỉnh nằm ngoài khoảng ngày hiệu lực của lớp học phần.")
         if slot.day_of_week != occurrence_date.isoweekday() + 1:
             raise HTTPException(status_code=422, detail="Khung giờ được chọn không thuộc đúng thứ của các buổi trong phạm vi điều chỉnh.")
@@ -627,7 +647,7 @@ def _export_rows(
     date_to: date | None = None,
 ) -> tuple[list[str], list[dict[str, object]]]:
     """Export the effective dated timetable, including one-session changes."""
-    fields = ["date", "academic_week", "status", "section_code", "course_code", "course_name", "lecturer_code", "lecturer_name", "room_code", "slot_code", "day_of_week", "start_period", "end_period", "course_type", "scheduling_student_count"]
+    fields = ["date", "academic_week", "status", "section_code", "meeting_number", "course_code", "course_name", "lecturer_code", "lecturer_name", "room_code", "slot_code", "day_of_week", "start_period", "end_period", "course_type", "scheduling_student_count"]
     assignments = {str(item["section_code"]): item for item in run.get("assignments", [])}
     occurrences = run.get("occurrences", [])
     if occurrences:
@@ -637,10 +657,20 @@ def _export_rows(
             combined = {**assignment, **occurrence}
             row = {field: combined.get(field, "") for field in fields}
             if _export_row_matches(row, lecturer_code, room_code, section_code, date_from, date_to):
+                row["date"] = _display_export_date(row.get("date"))
                 rows.append(row)
         return fields, sorted(rows, key=lambda item: (str(item.get("date", "")), str(item.get("section_code", ""))))
     rows = [{field: item.get(field, "") for field in fields} for item in run.get("assignments", [])]
     return fields, [row for row in rows if _export_row_matches(row, lecturer_code, room_code, section_code, date_from, date_to)]
+
+
+def _display_export_date(value: object) -> str:
+    if not value:
+        return ""
+    try:
+        return date.fromisoformat(str(value)).strftime("%d-%m-%Y")
+    except ValueError:
+        return str(value)
 
 
 def _export_row_matches(

@@ -52,6 +52,7 @@ export type CourseType = "THEORY" | "PRACTICE" | "INTEGRATED";
 
 export interface Assignment {
   section_code: string;
+  meeting_number?: number;
   course_code: string;
   course_name: string;
   lecturer_code: string;
@@ -63,10 +64,14 @@ export interface Assignment {
   end_period: number;
   course_type: CourseType;
   scheduling_student_count: number;
+  required_sessions?: number;
+  periods_per_session?: number;
+  second_session_periods?: number | null;
 }
 
 export interface Occurrence {
   section_code: string;
+  meeting_number?: number;
   date: string;
   room_code: string;
   slot_code: string;
@@ -155,6 +160,8 @@ export interface LecturerCourseSection {
   day_of_week?: number;
   start_period?: number;
   end_period?: number;
+  start_date?: string | null;
+  end_date?: string | null;
 }
 
 export interface LecturerTimetableOccurrence extends Occurrence {
@@ -171,9 +178,12 @@ export interface LecturerTimetableOccurrence extends Occurrence {
 export interface LecturerTimetable {
   official_code: string | null;
   academic_week: number;
+  week_start_date?: string | null;
+  week_end_date?: string | null;
   lecturer_code: string;
   lecturer_name: string;
   occurrences: LecturerTimetableOccurrence[];
+  teaching_dates?: string[];
   course_sections: LecturerCourseSection[];
 }
 

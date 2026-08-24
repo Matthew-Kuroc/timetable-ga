@@ -43,6 +43,7 @@ def expand_base_assignments_to_occurrences(
                         date=calendar_date.date,
                         academic_week=calendar_date.academic_week,
                         holiday_name=calendar_date.holiday_name,
+                        meeting_number=assignment.meeting_number,
                     )
                 )
                 continue
@@ -55,6 +56,7 @@ def expand_base_assignments_to_occurrences(
                     date=calendar_date.date,
                     academic_week=calendar_date.academic_week,
                     status="SCHEDULED",
+                    meeting_number=assignment.meeting_number,
                 )
             )
 

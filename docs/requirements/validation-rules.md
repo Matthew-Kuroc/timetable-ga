@@ -35,6 +35,9 @@ Use 1-based row numbers including the header row. For file-level errors, `row`, 
 | DV-11 | Room suitability must be checkable. | Capacity and room type are hard constraints for scheduling. |
 | DV-12 | Unknown real-world file formats need explicit mapping. | MVP may reject unknown schemas; flexible mapping can be added later. |
 | DV-13 | A confirmed import batch used by a GA run must remain immutable. | A correction is saved as a new batch/version; do not overwrite data referenced by an existing run. |
+| DV-14 | Multi-meeting fields must be internally consistent. | `weekly_sessions` is `1` or `2`; theory uses `1`; when value is `2`, `second_session_periods` is required and the currently supported patterns are `3+2` or `3+3`. |
+| DV-15 | Every declared meeting must have at least one configured compatible slot. | Check the first and second meeting durations separately; never synthesize a two-period range. |
+| DV-16 | A normal 15-week batch must expose the confirmed make-up window. | Calendar data includes valid configured teaching dates through academic week 18; week 19 is not part of the make-up window. |
 
 ## 3. File-Level Checks
 
@@ -55,6 +58,12 @@ Use 1-based row numbers including the header row. For file-level errors, `row`, 
 - A course section must have at least one locally feasible time slot and room before GA starts.
 - `academic_calendar.date` values must be valid ISO dates.
 - Academic calendar `day_of_week` must be in the same `2` to `8` format used by time slots.
+- `weekly_sessions=1` requires blank `second_session_periods`.
+- `weekly_sessions=2` is supported only for `PRACTICE` or `INTEGRATED`, requires
+  `periods_per_session=3`, and requires `second_session_periods` of `2` or `3`.
+- Both declared meetings use the same `section_code`, lecturer, course type and
+  explicit room requirement. They have derived meeting numbers `1` and `2`.
+- No minimum day spacing check is applied to two declared meetings.
 
 ## 5. Blocking Errors
 
@@ -70,6 +79,8 @@ Errors block saving an import batch or running GA:
 - No compatible room for a section.
 - `scheduling_student_count` not matching the priority rule.
 - Invalid academic calendar date or day-of-week value.
+- Invalid multi-meeting count, duration pattern or missing component slot.
+- Missing configured academic-week 16-18 teaching dates for the make-up window.
 
 ## 6. Non-Blocking Notes
 

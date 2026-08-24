@@ -14,16 +14,20 @@ from backend.app.domain.models import (
 
 VALID_THEORY_RANGES = {(1, 3), (4, 6), (7, 9), (10, 12), (13, 15)}
 VALID_LONG_RANGES = {(1, 5), (1, 6), (2, 6)}
+VALID_SHORT_COMPONENT_RANGES = {(1, 2), (2, 3), (4, 5), (5, 6), (7, 8), (8, 9), (10, 11), (11, 12), (13, 14), (14, 15)}
 
 
 def check_hard_constraints(
     input_data: TimetableInputData,
     assignments: Iterable[ScheduleAssignment],
+    *,
+    check_structure: bool = True,
 ) -> tuple[HardConstraintViolation, ...]:
     violations: list[HardConstraintViolation] = []
     normalized_assignments = tuple(assignments)
 
-    _check_assignment_structure(input_data, normalized_assignments, violations)
+    if check_structure:
+        _check_assignment_structure(input_data, normalized_assignments, violations)
     valid_assignments = [
         assignment
         for assignment in normalized_assignments
@@ -52,20 +56,19 @@ def _check_assignment_structure(
     assignments: tuple[ScheduleAssignment, ...],
     violations: list[HardConstraintViolation],
 ) -> None:
-    assigned_sections = {assignment.section_code for assignment in assignments}
-    for section_code in input_data.course_sections:
-        if section_code not in assigned_sections:
-            violations.append(
-                HardConstraintViolation(
-                    code="HC-03",
-                    message=f"Lớp {section_code} chưa có lịch học cơ bản.",
-                    section_code=section_code,
-                )
-            )
+    expected_keys = {
+        (section_code, meeting_number)
+        for section_code, section in input_data.course_sections.items()
+        for meeting_number in range(1, section.weekly_sessions + 1)
+    }
+    assigned_keys = {(assignment.section_code, assignment.meeting_number) for assignment in assignments}
+    for section_code, meeting_number in sorted(expected_keys):
+        if (section_code, meeting_number) not in assigned_keys:
+            violations.append(HardConstraintViolation(code="HC-03", message=f"Lớp {section_code}, buổi {meeting_number} chưa có lịch học cơ bản.", section_code=section_code))
 
-    section_counts: dict[str, int] = defaultdict(int)
+    section_counts: dict[tuple[str, int], int] = defaultdict(int)
     for assignment in assignments:
-        section_counts[assignment.section_code] += 1
+        section_counts[(assignment.section_code, assignment.meeting_number)] += 1
         if assignment.section_code not in input_data.course_sections:
             violations.append(
                 HardConstraintViolation(
@@ -76,6 +79,8 @@ def _check_assignment_structure(
                     slot_code=assignment.slot_code,
                 )
             )
+        elif (assignment.section_code, assignment.meeting_number) not in expected_keys:
+            violations.append(HardConstraintViolation(code="HC-03", message=f"Lớp {assignment.section_code} có số buổi không hợp lệ: {assignment.meeting_number}.", section_code=assignment.section_code))
         if assignment.room_code not in input_data.rooms:
             violations.append(
                 HardConstraintViolation(
@@ -97,12 +102,12 @@ def _check_assignment_structure(
                 )
             )
 
-    for section_code, count in section_counts.items():
+    for (section_code, meeting_number), count in section_counts.items():
         if count > 1 and section_code in input_data.course_sections:
             violations.append(
                 HardConstraintViolation(
                     code="HC-03",
-                    message=f"Lớp {section_code} có nhiều hơn một lịch học cơ bản.",
+                    message=f"Lớp {section_code}, buổi {meeting_number} có nhiều hơn một lịch học cơ bản.",
                     section_code=section_code,
                 )
             )
@@ -129,13 +134,13 @@ def _check_local_assignment_rules(
                 )
             )
 
-        if not _slot_supports_section(slot, section):
+        if not _slot_supports_section(slot, section, assignment.meeting_number):
             violations.append(
                 HardConstraintViolation(
                     code="HC-05",
                     message=(
                         f"Khung giờ {slot.slot_code} không phù hợp với loại lớp "
-                        f"{section.course_type} và số tiết {section.periods_per_session}."
+                        f"{section.course_type} và số tiết {_meeting_periods(section, assignment.meeting_number)}."
                     ),
                     section_code=section.section_code,
                     room_code=room.room_code,
@@ -289,9 +294,14 @@ def _check_room_overlaps(
                 )
 
 
-def _slot_supports_section(slot: TimeSlot, section: CourseSection) -> bool:
+def _meeting_periods(section: CourseSection, meeting_number: int) -> int:
+    if meeting_number == 2 and section.second_session_periods is not None:
+        return section.second_session_periods
+    return section.periods_per_session
+
+
+def _slot_supports_section(slot: TimeSlot, section: CourseSection, meeting_number: int = 1) -> bool:
     if section.course_type not in slot.supports_course_types:
         return False
-    if section.course_type == "THEORY":
-        return (slot.start_period, slot.end_period) in VALID_THEORY_RANGES and slot.duration == section.periods_per_session
-    return (slot.start_period, slot.end_period) in VALID_LONG_RANGES and slot.duration == section.periods_per_session
+    valid_ranges = VALID_THEORY_RANGES if section.course_type == "THEORY" else VALID_THEORY_RANGES | VALID_LONG_RANGES | VALID_SHORT_COMPONENT_RANGES
+    return (slot.start_period, slot.end_period) in valid_ranges and slot.duration == _meeting_periods(section, meeting_number)

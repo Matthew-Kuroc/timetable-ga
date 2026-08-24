@@ -72,7 +72,12 @@ lecturer.”
 
 ## 4. Weekly Schedule Model
 
-Each course section has one regular meeting per week.
+Most course sections have one regular meeting per week. A validated
+`PRACTICE` or `INTEGRATED` section may declare two weekly meetings. Five total
+weekly periods are normally represented as `3+2`; six may be represented as
+`3+3`. The input declares this pattern, and the GA must not invent the split.
+There is no mandatory minimum day gap, so two meetings may be on consecutive
+days.
 
 Examples:
 
@@ -80,19 +85,21 @@ Examples:
 - One practice class every Wednesday, periods 1–6.
 - One integrated class every Saturday, periods 2–6.
 
-A course section may produce approximately 15 dated occurrences during a
-semester.
+A one-meeting section may produce approximately 15 dated occurrences during a
+semester; a two-meeting section may produce approximately 30.
 
 For the MVP:
 
-- One gene represents one course section's base weekly assignment.
-- The chromosome contains approximately one gene per course section.
+- One gene represents one declared base weekly meeting, keyed by course section
+  and a stable meeting number.
+- The chromosome contains one gene per declared weekly meeting.
 - Do not create one independent gene for every dated occurrence.
 
 Example gene concept:
 
     Gene(
         section_code="AI-01",
+        meeting_number=1,
         lecturer_code="GV001",
         day_of_week=2,
         slot_code="LT_01_03",
@@ -140,7 +147,9 @@ Possible configured theory slots include:
 
 ### Practice
 
-Practice classes contain five or six periods.
+Practice sections have a total weekly load of five or six periods. Input may
+declare one continuous meeting or two component meetings. Each component must
+use a configured slot of the declared duration.
 
 Current valid practice slots include:
 
@@ -152,11 +161,14 @@ Current valid practice slots include:
 
 An integrated course section:
 
-- Combines theory and practice in one session.
+- Combines theory and practice within the course section's declared meeting(s).
 - Is represented as one course section.
 - Has one primary lecturer.
-- Uses five or six periods.
-- Uses the same slot-length rules as practice classes.
+- Is not split into separate theory and practice entries; the lecturer decides
+  how to combine both activities pedagogically.
+- Has five or six total weekly periods, possibly one continuous meeting or two
+  declared meetings such as `3+2` or `3+3`.
+- Uses configured slots compatible with each declared meeting duration.
 - May require a laboratory or a normal theory room.
 
 Do not infer the required room type only from `course_type`.
@@ -191,7 +203,7 @@ Example compatibility:
 
     compatible_slots[section_code] = [
         slot for slot in time_slots
-        if slot.supports(course_type, periods_per_session)
+        if slot.supports(course_type, meeting.period_count)
     ]
 
 Fail input validation before running the GA when a section has no compatible
@@ -446,7 +458,7 @@ At minimum, enforce:
 
 - `HC-01`: A lecturer must not teach overlapping classes.
 - `HC-02`: A room must not host overlapping classes.
-- `HC-03`: Each course section must receive one base weekly assignment.
+- `HC-03`: Each declared weekly meeting must receive exactly one base weekly assignment.
 - `HC-04`: The selected time slot must be valid.
 - `HC-05`: The slot must support the course type and session duration.
 - `HC-06`: The room type must satisfy the course-section requirement.
@@ -499,6 +511,10 @@ movement between university buildings.
 Official time slots already provide adequate transition time.
 
 Soft-constraint weights must be configurable and recorded with every run.
+
+The accepted initial experiment baseline is lecturer preferences `10`, room
+capacity waste `1`, large-room/small-class `25`, schedule gaps `4`, scattered
+days `8`, excess consecutive sessions `6`, and evening/weekend avoidance `5`.
 
 Each scoring function should be independently testable.
 
@@ -558,7 +574,7 @@ Precompute feasible domains for each course section.
 
 Example:
 
-    feasible_assignments[section_code] = [
+    feasible_assignments[(section_code, meeting_number)] = [
         Assignment(day, slot, room),
         ...
     ]
@@ -626,8 +642,8 @@ Crossover must preserve one gene per course section.
 
 After crossover:
 
-- No section may be missing.
-- No section may appear twice.
+- No declared meeting may be missing.
+- No `(section_code, meeting_number)` identity may appear twice.
 - Fixed lecturer and course-section data must remain unchanged.
 - Only assignable scheduling values may come from parents.
 
@@ -664,7 +680,7 @@ Mutation may change:
 
 Mutation must not change:
 
-- Course-section identity.
+- Course-section and meeting identity.
 - Primary lecturer.
 - Course identity.
 - Session duration.
@@ -708,7 +724,7 @@ Repair should:
 - Avoid infinite loops.
 - Have a configurable attempt limit.
 - Return whether repair succeeded.
-- Preserve the course-section identity.
+- Preserve the course-section and meeting identity.
 
 When repair fails:
 
@@ -895,7 +911,8 @@ The initial target is approximately:
 
 - 20 lecturers.
 - 100–200 course sections.
-- About 200 genes per chromosome.
+- About one gene per declared weekly meeting, normally 100–400 genes for the
+  target data.
 - Approximately 1,500–3,000 dated occurrences after calendar expansion.
 
 Optimize the chromosome and evaluation for course-section genes, not expanded
@@ -915,6 +932,11 @@ index can be prepared once.
 Do not sacrifice correctness for premature micro-optimization.
 
 Measure performance before introducing complex caching.
+
+For the recorded reference-machine benchmark, 100–200 sections at default
+population `80` and generation limit `200` should finish or preserve the best
+candidate within 10 minutes. A publishable result must have zero hard
+violations.
 
 ---
 
@@ -963,6 +985,8 @@ At minimum, unit tests must cover:
 - Practice with periods 2–6.
 - Integrated class with five periods.
 - Integrated class with six periods.
+- Practice/integrated five-period weekly load declared as `3+2` meetings.
+- Two declared meetings on consecutive days remaining valid.
 - Invalid course-type and slot combination.
 
 ### Rooms
@@ -1078,7 +1102,8 @@ A Genetic Algorithm change is complete when:
 
 - It follows the latest URS and SRS.
 - It preserves fixed teaching assignments.
-- It uses one base weekly gene per course section for the MVP.
+- It uses one base weekly gene per declared section meeting and never one gene
+  per dated occurrence.
 - It selects only configured valid time slots.
 - It correctly detects partial overlaps.
 - It enforces room type and capacity.

@@ -15,12 +15,13 @@ python -m alembic -c alembic.ini upgrade head
 python -m alembic -c alembic.ini current
 ```
 
-Revision hien tai la `20260813_0007`. Revision nay tao bang yeu cau dieu chinh
-lich, bang audit su kien va lien ket audit ap dung voi yeu cau. Lenh `upgrade`
-khong xoa du lieu cua cac revision truoc.
+Revision hien tai la `20260824_0010`. Revision `0007` tao bang yeu cau dieu
+chinh lich; `0008` va `0009` bao ve tai khoan bootstrap/system Administrator;
+`0010` them du lieu meeting thu hai va meeting_number on dinh.
+Lenh `upgrade` khong xoa du lieu cua cac revision truoc.
 
 Lan kiem tra gan nhat da nang cap thanh cong database phat trien den
-`20260813_0007 (head)`.
+`20260824_0010 (head)` ngay 24/08/2026.
 
 ## Kiem tra sau migration
 

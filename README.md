@@ -102,6 +102,9 @@ ngoài.
 
 Trong MVP, mỗi tài khoản có **đúng một** role. Quyền được kiểm tra tại backend;
 việc ẩn nút hoặc menu trên frontend không thay thế cho kiểm tra phân quyền.
+Chính sách đã chốt cho bản thực tập là đúng một tài khoản `ADMIN`, đúng một tài
+khoản `TRAINING_OFFICE` và nhiều tài khoản `LECTURER`. Không có đăng ký công
+khai hoặc quy trình quên/reset mật khẩu trong MVP.
 
 | Nhóm chức năng | `ADMIN` | `TRAINING_OFFICE` | `LECTURER` |
 | --- | --- | --- | --- |
@@ -121,8 +124,7 @@ Quản trị viên có thể:
 - Xem lịch sử thay đổi tài khoản và hoạt động xác thực.
 
 Trong MVP một-role, tài khoản `ADMIN` không được upload dữ liệu, chạy GA hoặc
-chỉnh sửa thời khóa biểu. Hỗ trợ một tài khoản đồng thời có nhiều role vẫn là
-vấn đề chờ xác nhận và chưa được bật.
+chỉnh sửa thời khóa biểu. Multi-role nằm ngoài phạm vi bản thực tập đã chốt.
 
 ### 3.2. Phòng đào tạo
 
@@ -250,7 +252,10 @@ Ví dụ, một giảng viên có thể được phân công:
 
 Trong lịch cơ sở:
 
-- Mỗi lớp học phần có một buổi học cố định mỗi tuần.
+- Đa số lớp học phần có một buổi học cố định mỗi tuần.
+- Lớp `PRACTICE` hoặc `INTEGRATED` có thể khai báo hai buổi/tuần. Tải lượng năm
+  tiết thường được chia `3+2`; sáu tiết có thể chia `3+3`.
+- Hai buổi không bắt buộc cách ngày và có thể học vào hai ngày liên tiếp.
 - Một học phần có thể kéo dài khoảng 15 tuần.
 - Một số tuần có thể không có buổi học do ngày nghỉ.
 - Một số tuần có thể có thêm buổi học bù.
@@ -295,7 +300,9 @@ Các khung giờ dự kiến:
 
 ### 6.2. Thực hành
 
-Lớp thực hành học năm hoặc sáu tiết trong một buổi.
+Lớp thực hành có tổng tải lượng năm hoặc sáu tiết mỗi tuần. Dữ liệu có thể khai
+báo một buổi liên tục hoặc hai buổi, thường là `3+2` hoặc `3+3`. Mỗi thành phần
+hai/ba tiết chỉ được dùng khung giờ đã cấu hình tương ứng.
 
 Các khung giờ hợp lệ:
 
@@ -309,9 +316,10 @@ Một lớp tích hợp:
 
 - Là một lớp học phần duy nhất.
 - Có một giảng viên phụ trách.
-- Dạy lý thuyết và thực hành trong cùng một buổi.
-- Học năm hoặc sáu tiết.
-- Sử dụng khung giờ giống lớp thực hành.
+- Kết hợp nội dung lý thuyết và thực hành theo cách giảng viên tổ chức; không
+  tách thành hai lớp hoặc hai loại entry riêng.
+- Có tổng tải lượng năm hoặc sáu tiết, theo một buổi hoặc hai buổi đã khai báo.
+- Sử dụng khung giờ đã cấu hình phù hợp với thời lượng của từng buổi.
 - Có thể học tại phòng máy, phòng thực hành chuyên ngành hoặc phòng lý thuyết
   tùy dữ liệu của lớp.
 
@@ -506,8 +514,11 @@ lịch chính thức. Phòng đào tạo kiểm tra ràng buộc trước khi ch
 mới chuyển sang `APPLIED` và ghi audit. Yêu cầu `PENDING` cũng có thể được
 giảng viên hủy hoặc Phòng đào tạo từ chối kèm lý do.
 
-Đổi toàn bộ lịch lặp chưa được bật vì hạn khóa nghiệp vụ vẫn cần được xác nhận
-và cấu hình theo `FR-REQ-09`; hệ thống không tự đặt một hạn mặc định.
+Đổi toàn bộ ngày/giờ của lịch lặp chỉ được phép trước khi lịch chính thức được
+công bố cho sinh viên đăng ký. Sau khi công bố, hệ thống phải từ chối đổi toàn
+bộ thứ hoặc tiết. Nếu phòng học gặp sự cố dài hạn, Phòng đào tạo vẫn có thể tạo
+phân đoạn chỉ đổi phòng, giữ nguyên thứ/tiết, kèm lý do, audit và kiểm tra mọi
+ràng buộc cứng.
 
 ### 9.3. Phạm vi chỉnh sửa
 
@@ -553,6 +564,14 @@ Hệ thống chỉ cần kiểm tra:
 
 Việc xác định thời gian mà toàn bộ sinh viên đều rảnh được giải quyết bên ngoài
 ứng dụng.
+
+Buổi thường kỳ bị tạm ngưng được tính là thiếu một buổi. Lớp học 15 tuần có thể
+được xếp bù vào ngày dạy hợp lệ thuộc tuần học vụ 16, 17 hoặc 18. Tuần 19 trở đi
+bị từ chối vì đã ngoài cửa sổ học bù hiện tại.
+
+File CSV/XLSX theo ngày hiển thị ngày theo `DD-MM-YYYY`; API vẫn dùng
+`YYYY-MM-DD`. CSV dùng UTF-8 BOM và tên file theo mẫu
+`<ten-batch>-<run-hoac-official-code>-<timestamp>.<ext>`.
 
 ---
 
@@ -833,8 +852,8 @@ Quy mô ban đầu:
 
 - Khoảng 20 giảng viên.
 - Khoảng 100–200 lớp học phần.
-- Khoảng một gene cho mỗi lớp học phần.
-- Khoảng 15 buổi cụ thể cho mỗi lớp trong một học kỳ.
+- Một gene cho mỗi meeting tuần đã khai báo, không phải mỗi occurrence theo ngày.
+- Khoảng 15 buổi cụ thể cho lớp một meeting và khoảng 30 cho lớp hai meeting.
 - Khoảng 1.500–3.000 buổi học cụ thể sau khi mở rộng theo lịch học kỳ.
 
 Các mức thử nghiệm:
@@ -843,11 +862,19 @@ Các mức thử nghiệm:
 | ------- | ----------------------------- | ------------------------- |
 | Rất nhỏ | 2–5 giảng viên, 5–20 lớp      | Kiểm tra bằng tay         |
 | Ban đầu | 20 giảng viên, 100–200 lớp    | Tinh chỉnh và đánh giá GA |
-| Mở rộng | Dữ liệu sinh lớn hơn          | Đánh giá khả năng mở rộng |
-| Thực tế | Dữ liệu được cho phép sử dụng | Đánh giá cuối cùng        |
+| Mở rộng | Dữ liệu tổng hợp khoảng 600 giảng viên, 3.000 lớp, 150 phòng | Stress test quy mô trường |
+| Thực tế | Chỉ dùng khi có dữ liệu được phép công bố | Đánh giá cuối cùng |
 
 Không bắt đầu phát triển bằng tập dữ liệu quá lớn khi các quy tắc và thuật toán
 chưa được kiểm thử đầy đủ.
+
+Do dữ liệu gốc của trường không thể được tiết lộ, người hướng dẫn đã cho phép
+tạo bộ dữ liệu tổng hợp có quy mô tương đương. Bộ này phải ẩn danh, sinh lại
+được bằng seed cố định và không được mô tả như dữ liệu thật của trường.
+
+Mục tiêu đã chốt cho 100–200 lớp ở cấu hình mặc định population `80`, tối đa
+`200` thế hệ là hoàn thành hoặc lưu được best candidate trong 10 phút trên máy
+tham chiếu được ghi trong báo cáo. Lịch được công bố phải có 0 vi phạm cứng.
 
 ---
 
@@ -884,7 +911,7 @@ Các biến môi trường liên quan:
 | `CORS_ORIGINS` | Danh sách origin frontend được gửi cookie phiên, phân cách bằng dấu phẩy; mặc định cho Vite tại `127.0.0.1:5173` và `localhost:5173`. |
 
 Từ thư mục gốc repository, áp dụng toàn bộ migration. Migration mới nhất hiện
-tại là `20260813_0007_schedule_change_requests.py`:
+tại là `20260824_0010_multi_meeting_support.py`:
 
 ```powershell
 $env:PYTHONPATH='.'
@@ -900,6 +927,14 @@ python -m backend.app.cli.bootstrap_admin --username admin --display-name "Quả
 CLI yêu cầu nhập và xác nhận mật khẩu bằng prompt ẩn, không nhận mật khẩu qua
 tham số và không có mật khẩu mặc định. Lệnh chỉ bootstrap khi hệ thống chưa có
 tài khoản `ADMIN`; các tài khoản tiếp theo được tạo trong cổng Quản trị viên.
+
+Quyết định cho phiên triển khai tiếp theo: Administrator được cấp tài khoản
+Lecturer hàng loạt từ batch đã xác nhận, cho một nhóm mã giảng viên hoặc toàn
+bộ danh sách. Mỗi tài khoản dùng mật khẩu tạm ngẫu nhiên riêng và bắt buộc đổi
+ở lần đăng nhập đầu; không dùng mật khẩu mặc định chung. Administrator cũng có
+thể cấp lại mật khẩu tạm cho Lecturer bị mất quyền truy cập. Mật khẩu cũ không
+thể xem lại, các phiên cũ bị thu hồi và thao tác được audit. Không có public
+registration hoặc public/self-service forgot-password trong MVP.
 
 Sau khi chạy backend và frontend, mở `#/login` để đăng nhập. Đăng nhập thành
 công sẽ chuyển người dùng tới cổng đúng với role duy nhất của tài khoản. Nút
@@ -971,6 +1006,22 @@ không được commit.
 
 Không đưa khóa bí mật, mật khẩu hoặc thông tin kết nối thật vào repository.
 
+### E2E thật với PostgreSQL
+
+Bộ Playwright mặc định dùng mock API để kiểm tra nhanh giao diện. Để chạy
+toàn bộ chuỗi React -> FastAPI -> PostgreSQL trên database riêng:
+
+```powershell
+cd frontend
+npm run test:e2e:real
+```
+
+Runner đọc `E2E_DATABASE_URL`; nếu chưa có, nó suy ra `timetable_ga_e2e` từ
+`DATABASE_URL` trong `.env`. Database đích bắt buộc có hậu tố `_e2e` vì schema
+được reset trước mỗi lượt chạy. Mật khẩu tài khoản E2E chỉ được sinh tạm trong
+bộ nhớ. Kịch bản bao phủ import 7 CSV, GA, publish, export, segment room-only,
+học bù tuần 18/từ chối tuần 19 và quy trình yêu cầu của Lecturer.
+
 ---
 
 ## 18. Trạng thái dự án
@@ -984,8 +1035,8 @@ Dự án đã hoàn thành MVP kỹ thuật chính:
 - Yêu cầu đổi lịch, kiểm tra/phê duyệt/áp dụng và export CSV/XLSX có bộ lọc.
 - CI chạy kiểm thử backend, migration PostgreSQL, frontend build và Playwright.
 
-Các quyết định nghiệp vụ còn mở vẫn được ghi trong UR/SRS draft và cần xác nhận
-trước khi mở rộng phạm vi triển khai.
+Các quyết định nghiệp vụ chính đã được chốt ngày 23/08/2026 và ghi trong
+UR/SRS. Nội dung đóng gói/demo cuối cùng vẫn chờ xác nhận từ người hướng dẫn.
 
 Các lệnh migration, bootstrap `ADMIN`, chạy backend và chạy frontend được mô
 tả tại mục 17. Chỉ sử dụng các lệnh đã tồn tại trong repository và không đưa

@@ -168,10 +168,10 @@ def _is_better(candidate: TimetableCandidate, current_best: TimetableCandidate) 
     return _candidate_sort_key(candidate) < _candidate_sort_key(current_best)
 
 
-def _candidate_sort_key(candidate: TimetableCandidate) -> tuple[int, float, tuple[tuple[str, str, str], ...]]:
+def _candidate_sort_key(candidate: TimetableCandidate) -> tuple[int, float, tuple[tuple[str, int, str, str], ...]]:
     stable_assignments = tuple(
         sorted(
-            (assignment.section_code, assignment.slot_code, assignment.room_code)
+            (assignment.section_code, assignment.meeting_number, assignment.slot_code, assignment.room_code)
             for assignment in candidate.assignments
         )
     )
@@ -192,12 +192,12 @@ def _target_reached(candidate: TimetableCandidate, config: GeneticAlgorithmConfi
 
 def _build_assignment_domain_index(
     ordered_domains: tuple[FeasibleAssignmentDomain, ...],
-) -> dict[str, tuple[ScheduleAssignment, ...]]:
+) -> dict[tuple[str, int], tuple[ScheduleAssignment, ...]]:
     return {
-        domain.section_code: tuple(
+        (domain.section_code, domain.meeting_number): tuple(
             sorted(
                 domain.assignments,
-                key=lambda assignment: (assignment.section_code, assignment.slot_code, assignment.room_code),
+                key=lambda assignment: (assignment.section_code, assignment.meeting_number, assignment.slot_code, assignment.room_code),
             )
         )
         for domain in ordered_domains
@@ -213,7 +213,7 @@ def _random_assignments(
             tuple(
                 sorted(
                     domain.assignments,
-                    key=lambda assignment: (assignment.section_code, assignment.slot_code, assignment.room_code),
+                    key=lambda assignment: (assignment.section_code, assignment.meeting_number, assignment.slot_code, assignment.room_code),
                 )
             )
         )
@@ -296,7 +296,7 @@ def _range_conflicts(current_range: tuple[int, int], existing_ranges: list[tuple
 def _next_generation(
     input_data: TimetableInputData,
     population: list[TimetableCandidate],
-    assignment_domains: dict[str, tuple[ScheduleAssignment, ...]],
+    assignment_domains: dict[tuple[str, int], tuple[ScheduleAssignment, ...]],
     config: GeneticAlgorithmConfig,
     rng: random.Random,
 ) -> list[TimetableCandidate]:
@@ -328,8 +328,8 @@ def _crossover(
     crossover_rate: float,
     rng: random.Random,
 ) -> tuple[ScheduleAssignment, ...]:
-    first_by_section = {assignment.section_code: assignment for assignment in first_parent}
-    second_by_section = {assignment.section_code: assignment for assignment in second_parent}
+    first_by_section = {(assignment.section_code, assignment.meeting_number): assignment for assignment in first_parent}
+    second_by_section = {(assignment.section_code, assignment.meeting_number): assignment for assignment in second_parent}
     section_order = sorted(first_by_section)
     if rng.random() >= crossover_rate:
         return tuple(first_by_section[section_code] for section_code in section_order)
@@ -341,14 +341,14 @@ def _crossover(
 
 def _mutate(
     assignments: tuple[ScheduleAssignment, ...],
-    assignment_domains: dict[str, tuple[ScheduleAssignment, ...]],
+    assignment_domains: dict[tuple[str, int], tuple[ScheduleAssignment, ...]],
     mutation_rate: float,
     rng: random.Random,
 ) -> tuple[ScheduleAssignment, ...]:
     mutated: list[ScheduleAssignment] = []
     for assignment in assignments:
         if rng.random() < mutation_rate:
-            mutated.append(rng.choice(assignment_domains[assignment.section_code]))
+            mutated.append(rng.choice(assignment_domains[(assignment.section_code, assignment.meeting_number)]))
         else:
             mutated.append(assignment)
     return tuple(mutated)

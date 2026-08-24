@@ -60,6 +60,9 @@ The Administrator may:
 - Create, update, activate or deactivate approved user accounts.
 - Assign `ADMIN`, `TRAINING_OFFICE` or `LECTURER` roles.
 - View account and authentication audit history.
+- Explicitly provision Lecturer accounts in bulk from a confirmed lecturer
+  catalog, either for selected lecturer codes or for the complete batch.
+- Issue a new one-time temporary password for a Lecturer who cannot sign in.
 
 The Administrator must not automatically receive timetable-operation access
 unless the account is also explicitly granted the Training Office role.
@@ -92,6 +95,8 @@ A lecturer may:
 - View details of assigned course sections.
 - Submit schedule-adjustment requests.
 - Track the processing status of submitted requests.
+- Replace a temporary password on first login and change their own password
+  while authenticated.
 
 A lecturer must not:
 
@@ -103,6 +108,22 @@ A lecturer must not:
 
 Do not add any role beyond `ADMIN`, `TRAINING_OFFICE` and `LECTURER` unless the
 requirements are formally changed again.
+
+For the internship MVP, each account has exactly one role. The runtime policy
+allows exactly one protected `ADMIN`, exactly one `TRAINING_OFFICE`, and
+multiple `LECTURER` accounts. There is no public registration or public/
+self-service forgotten-password workflow. Every Lecturer account is bound to
+one stable `lecturer_code`.
+
+Bulk Lecturer provisioning is an explicit Administrator operation and must
+not happen merely because a lecturer row was imported. Each new account gets
+a unique random temporary password, never a shared default. Plaintext
+temporary credentials may be written once to an ignored local handoff file;
+the database stores only password hashes. The account must change that
+temporary password on first login. If a Lecturer loses access, the
+Administrator may issue a new temporary password, revoke existing sessions,
+set the first-login-change requirement again, and record an audit event. The
+old password must never be displayed or recovered.
 
 ---
 
@@ -131,13 +152,22 @@ A substitute lecturer for one exceptional session, when supported later, does no
 
 Under the current agreed model:
 
-- Each course section has one regular meeting per week.
-- A course section may contain approximately 15 occurrences in a semester.
+- Most course sections have one regular meeting per week.
+- A `PRACTICE` or `INTEGRATED` section may have two declared weekly meetings.
+- A five-period weekly load is normally split into meetings of three and two
+  periods; a six-period split may use two three-period meetings.
+- The input data declares the meeting count and durations. The GA never decides
+  to split a course or to separate theory content from practice content.
+- Two meetings have no mandatory minimum day gap and may occur on consecutive
+  days when all hard constraints pass.
+- A one-meeting section may contain approximately 15 occurrences in a semester;
+  a two-meeting section may contain approximately 30.
 - A dataset of 100–200 course sections may therefore produce roughly 1,500–3,000 dated occurrences.
 
 For the MVP Genetic Algorithm:
 
-- One gene represents the base weekly assignment of one course section.
+- One gene represents one declared base weekly meeting, identified by course
+  section and stable meeting number.
 - A gene selects the day, time slot, and room.
 - The lecturer and course section are fixed by teaching-assignment data.
 - Dated session occurrences are generated after the base timetable is created.
@@ -168,7 +198,9 @@ Configured theory slots may include:
 
 ### Practice
 
-Practice classes use five or six periods.
+Practice classes have a total weekly load of five or six periods. Input may
+declare either one continuous meeting or two meetings. A common five-period
+pattern is `3+2`.
 
 Current valid practice slots are:
 
@@ -176,15 +208,20 @@ Current valid practice slots are:
 - Periods 1–6
 - Periods 2–6
 
+A declared two- or three-period component meeting must use a configured slot
+with the matching duration. Do not invent a two-period range in the GA.
+
 ### Integrated theory and practice
 
 An integrated course:
 
 - Is one course section.
 - Is taught by one lecturer.
-- Combines theory and practice in the same session.
-- Uses five or six periods.
-- Uses the same time-slot rules as a practice class.
+- Combines theory and practice pedagogically; scheduled meetings are not split
+  into separate `THEORY` and `PRACTICE` course sections or entries.
+- Has a total weekly load of five or six periods, possibly declared as one
+  continuous meeting or two meetings such as `3+2` or `3+3`.
+- Uses configured slots compatible with each declared meeting duration.
 - May require a computer laboratory, specialized room, or normal theory room depending on input data.
 
 Do not infer the required room type only from the course type. Use the explicit room requirement of the course section.
@@ -290,6 +327,11 @@ Do not automatically move every holiday session to the next week.
 
 A course is considered complete when its regular and makeup sessions satisfy the required number of sessions or periods.
 
+A suspended or missed regular occurrence counts as one missing session. The
+Training Office may add a validated makeup session in academic week 16, 17 or
+18 even when the regular section ended after week 15. Academic week 19 and
+later are outside the current makeup window.
+
 ---
 
 ## 10. Schedule Segments and Exceptions
@@ -311,7 +353,8 @@ The data model must support schedule segments containing:
 
 For the MVP:
 
-- The Genetic Algorithm creates one base schedule for the course section.
+- The Genetic Algorithm creates one base schedule for each declared weekly
+  meeting of the course section.
 - The Training Office may manually split the schedule into date-range segments.
 - The Genetic Algorithm does not need to create multiple room segments automatically.
 
@@ -323,6 +366,12 @@ The system should support adjustment scopes such as:
 - The entire regular schedule before the registration lock point.
 
 A one-session exception takes precedence over the base segment for that date.
+
+The recurring day/time schedule is locked when the official timetable is
+published for student registration. After publication, do not move the whole
+recurring schedule to a different day or slot. If a room has a long-term
+facility problem, the Training Office may create an audited room-only segment
+that preserves the same day and slot and passes every hard constraint.
 
 ---
 
@@ -410,6 +459,12 @@ each GA run.
 
 Soft-constraint weights must be configurable and recorded with each GA run.
 
+The accepted initial experiment baseline is: lecturer preferences `10`, room
+capacity waste `1`, large-room/small-class `25`, schedule gaps `4`, scattered
+days `8`, excess consecutive sessions `6`, and evening/weekend avoidance `5`.
+These are configurable quality weights, not hard constraints or a claim of
+optimality.
+
 ---
 
 ## 14. CSV Data Rules
@@ -453,6 +508,11 @@ CSV validation errors must identify:
 - Reason.
 
 Do not include real student personal data in sample files.
+
+For dated timetable exports, CSV must use UTF-8 BOM and both CSV/XLSX date
+cells use `DD-MM-YYYY`; API and input dates remain ISO `YYYY-MM-DD`. Export
+filenames follow
+`<batch-name>-<run-or-official-code>-<timestamp>.<extension>`.
 
 ---
 
@@ -506,6 +566,9 @@ At minimum, tests should cover:
 - Large-room soft penalties.
 - Holiday occurrence generation.
 - Missing-session calculation.
+- Makeup sessions in weeks 16–18 and rejection from week 19 onward.
+- A five-period `PRACTICE`/`INTEGRATED` section declared as `3+2` meetings.
+- Two declared weekly meetings on consecutive days.
 - Schedule-segment splitting.
 - One-session exceptions.
 - Direct timetable edits.
@@ -519,8 +582,22 @@ The initial target dataset is approximately:
 
 - 20 lecturers.
 - 100–200 course sections.
-- About 15 regular occurrences per course section.
+- About 15 regular occurrences for one-meeting sections and about 30 for
+  two-meeting sections.
 - Approximately 1,500–3,000 generated dated occurrences.
+
+At the default population `80` and generation limit `200`, a 100–200 section
+run should finish or preserve the best-so-far candidate within 10 minutes on
+the recorded reference machine. A timetable may be published only with zero
+hard violations.
+
+The supervisor has additionally requested a synthetic university-scale stress
+fixture of approximately 600 lecturers, 3,000 course sections and 150 rooms
+because real university data cannot be disclosed. Keep it anonymous,
+reproducible with a fixed generator seed, and compatible with the same seven
+CSV schemas. Treat this as a separate scalability experiment; it does not
+replace the 100–200-section MVP performance target or permit relaxing hard
+constraints.
 
 ---
 

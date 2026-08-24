@@ -168,4 +168,6 @@ test("Phòng Đào tạo upload, preview và xác nhận đủ 7 CSV", async ({ 
   await page.getByRole("button", { name: "Xác nhận bộ dữ liệu" }).click();
   await expect(page).toHaveURL(/#\/training-office\/ga$/);
   await expect(page.getByRole("heading", { name: "Cấu hình Thuật toán Di truyền" })).toBeVisible();
+  await expect(page.getByText("Trọng số ràng buộc mềm")).toBeVisible();
+  await expect(page.getByLabel("Ưu tiên giảng viên")).toHaveValue("10");
 });

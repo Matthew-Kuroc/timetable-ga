@@ -232,6 +232,7 @@ class CourseSectionModel(Base):
     required_sessions: Mapped[int] = mapped_column(Integer, nullable=False)
     weekly_sessions: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     periods_per_session: Mapped[int] = mapped_column(Integer, nullable=False)
+    second_session_periods: Mapped[int | None] = mapped_column(Integer)
     expected_students: Mapped[int] = mapped_column(Integer, nullable=False)
     initial_registration_limit: Mapped[int | None] = mapped_column(Integer)
     approved_max_students: Mapped[int | None] = mapped_column(Integer)
@@ -459,7 +460,7 @@ class MakeupSessionModel(Base):
 class ScheduleAssignmentModel(Base):
     __tablename__ = "schedule_assignments"
     __table_args__ = (
-        UniqueConstraint("ga_run_id", "course_section_id", name="uq_schedule_assignments_run_section"),
+        UniqueConstraint("ga_run_id", "course_section_id", "meeting_number", name="uq_schedule_assignments_run_section_meeting"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -468,6 +469,7 @@ class ScheduleAssignmentModel(Base):
     lecturer_id: Mapped[int] = mapped_column(ForeignKey("lecturers.id"), nullable=False)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), nullable=False)
     time_slot_id: Mapped[int] = mapped_column(ForeignKey("time_slots.id"), nullable=False)
+    meeting_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="SCHEDULED")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

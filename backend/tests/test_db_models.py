@@ -54,6 +54,7 @@ class DatabaseModelTests(unittest.TestCase):
             "required_sessions",
             "weekly_sessions",
             "periods_per_session",
+            "second_session_periods",
             "scheduling_student_count",
             "course_type",
             "required_room_type",
@@ -68,6 +69,7 @@ class DatabaseModelTests(unittest.TestCase):
         Base.metadata.create_all(engine)
 
         self.assertIn("schedule_assignments", Base.metadata.tables)
+        self.assertIn("meeting_number", Base.metadata.tables["schedule_assignments"].columns.keys())
 
 
 if __name__ == "__main__":

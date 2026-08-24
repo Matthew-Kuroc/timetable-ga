@@ -51,6 +51,7 @@ class CourseSection:
     periods_per_session: int
     required_sessions: int
     weekly_sessions: int
+    second_session_periods: int | None
     expected_students: int
     initial_registration_limit: int | None
     approved_max_students: int | None
@@ -90,11 +91,13 @@ class ScheduleAssignment:
     section_code: str
     room_code: str
     slot_code: str
+    meeting_number: int = 1
 
 
 @dataclass(frozen=True)
 class FeasibleAssignmentDomain:
     section_code: str
+    meeting_number: int
     assignments: tuple[ScheduleAssignment, ...]
 
 
@@ -117,6 +120,7 @@ class ScheduleOccurrence:
     date: date
     academic_week: int
     status: str = "SCHEDULED"
+    meeting_number: int = 1
 
 
 @dataclass(frozen=True)
@@ -127,6 +131,7 @@ class SkippedHolidaySession:
     date: date
     academic_week: int
     holiday_name: str
+    meeting_number: int = 1
 
 
 @dataclass(frozen=True)
