@@ -96,6 +96,24 @@ class SimpleGeneticAlgorithmTests(unittest.TestCase):
         self.assertEqual(result.stop_reason, "NO_FEASIBLE_ASSIGNMENT_DOMAIN")
         self.assertIn("IT404_01", result.diagnostics[0])
 
+    def test_time_limit_preserves_best_so_far(self) -> None:
+        result = run_simple_genetic_algorithm(
+            self.input_data,
+            GeneticAlgorithmConfig(population_size=20, generations=200, seed=42, time_limit_seconds=0.0001),
+        )
+        self.assertEqual(result.status, "STOPPED")
+        self.assertEqual(result.stop_reason, "TIME_LIMIT")
+        self.assertIsNotNone(result.best_candidate)
+
+    def test_cancellation_callback_stops_after_first_generation(self) -> None:
+        result = run_simple_genetic_algorithm(
+            self.input_data,
+            GeneticAlgorithmConfig(population_size=20, generations=200, seed=42, cancellation_callback=lambda: True),
+        )
+        self.assertEqual(result.status, "STOPPED")
+        self.assertEqual(result.stop_reason, "CANCELLED")
+        self.assertIsNotNone(result.best_candidate)
+
 
 if __name__ == "__main__":
     unittest.main()

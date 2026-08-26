@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
-from backend.app.core.security import hash_password, validate_password
+from backend.app.core.security import hash_password, validate_password, verify_password
 from backend.app.db.models import AccountAuditModel, AppUserModel, AuthSessionModel
 from backend.app.db.session import get_session_local
 from backend.app.domain.auth import UserRole
@@ -27,6 +27,12 @@ class AccountValidationError(ValueError):
 
 
 LEGACY_PASSWORD_SENTINEL = "!legacy-account-without-password!"
+
+
+def _temporary_password() -> str:
+    import secrets
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%"
+    return "".join(secrets.choice(alphabet) for _ in range(20))
 
 
 def create_user(
@@ -54,6 +60,7 @@ def create_user(
             username=normalized_username,
             display_name=display_name.strip(),
             password_hash=_validated_password_hash(password),
+            must_change_password=True,
             role=role.value,
             active=True,
             lecturer_code=normalized_lecturer_code,
@@ -130,6 +137,7 @@ def update_user(
         password_changed = "password" in changes and changes["password"] is not None
         if password_changed:
             user.password_hash = _validated_password_hash(str(changes["password"]))
+            user.must_change_password = True
         user.updated_at = now
 
         try:
@@ -299,6 +307,7 @@ def user_snapshot(user: AppUserModel) -> dict[str, Any]:
         "active": user.active,
         "system_account": user.system_account,
         "lecturer_code": user.lecturer_code,
+        "must_change_password": bool(user.must_change_password),
     }
 
 
@@ -402,3 +411,107 @@ def _validated_password_hash(password: str) -> str:
     except ValueError as error:
         raise AccountValidationError(str(error)) from error
     return hash_password(password)
+
+
+def change_own_password(*, user_id: int, current_password: str, new_password: str) -> None:
+    now = datetime.now(timezone.utc)
+    with get_session_local()() as session:
+        user = session.get(AppUserModel, user_id)
+        if user is None or not verify_password(current_password, user.password_hash):
+            raise AccountValidationError("Mật khẩu hiện tại không đúng.")
+        new_hash = _validated_password_hash(new_password)
+        if verify_password(current_password, new_hash):
+            raise AccountValidationError("Mật khẩu mới phải khác mật khẩu hiện tại.")
+        user.password_hash = new_hash
+        user.must_change_password = False
+        user.updated_at = now
+        sessions = session.scalars(
+            select(AuthSessionModel).where(
+                AuthSessionModel.user_id == user_id,
+                AuthSessionModel.revoked_at.is_(None),
+            )
+        ).all()
+        for auth_session in sessions:
+            auth_session.revoked_at = now
+        session.add(
+            AccountAuditModel(
+                actor_user_id=user.id,
+                target_user_id=user.id,
+                actor_username=user.username,
+                target_username=user.username,
+                action="PASSWORD_CHANGED",
+                new_value={"must_change_password": False},
+                created_at=now,
+            )
+        )
+        session.commit()
+
+
+def provision_lecturer_accounts(
+    *,
+    actor: AppUserModel,
+    lecturer_codes: list[str] | None = None,
+    all_lecturers: bool = False,
+) -> dict[str, Any]:
+    catalog = list_confirmed_lecturers()
+    available = {
+        str(item["lecturer_code"]): str(item.get("lecturer_name") or item["lecturer_code"])
+        for item in catalog.get("lecturers", [])
+        if isinstance(item, dict) and item.get("lecturer_code")
+    }
+    requested = set(available) if all_lecturers else {str(item).strip() for item in (lecturer_codes or []) if str(item).strip()}
+    unknown = sorted(requested - set(available))
+    if unknown:
+        raise AccountValidationError(f"Không tìm thấy mã giảng viên trong batch đã xác nhận: {', '.join(unknown)}.")
+    created: list[dict[str, str]] = []
+    skipped: list[str] = []
+    conflicts: list[dict[str, str]] = []
+    with get_session_local()() as session:
+        for code in sorted(requested):
+            existing = session.scalar(select(AppUserModel).where(AppUserModel.lecturer_code == code))
+            if existing is not None:
+                skipped.append(code)
+                continue
+            username = normalize_username(code)
+            if session.scalar(select(AppUserModel.id).where(AppUserModel.username == username)) is not None:
+                conflicts.append({"lecturer_code": code, "reason": f"Tên đăng nhập {username} đã được sử dụng."})
+                continue
+            password = _temporary_password()
+            user = AppUserModel(
+                username=username,
+                display_name=available[code],
+                password_hash=hash_password(password),
+                must_change_password=True,
+                role=UserRole.LECTURER.value,
+                active=True,
+                lecturer_code=code,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+            session.add(user)
+            session.flush()
+            session.add(_audit(actor=actor, target=user, action="LECTURER_PROVISIONED", old_value=None, new_value=user_snapshot(user), now=datetime.now(timezone.utc)))
+            created.append({"lecturer_code": code, "username": username, "temporary_password": password})
+        session.commit()
+    return {"batch_code": catalog.get("batch_code"), "created": created, "skipped": skipped, "conflicts": conflicts}
+
+
+def reset_lecturer_password(*, actor: AppUserModel, user_id: int) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    with get_session_local()() as session:
+        user = session.get(AppUserModel, user_id)
+        if user is None:
+            raise AccountNotFoundError("Không tìm thấy tài khoản.")
+        if user.role != UserRole.LECTURER.value or not user.lecturer_code:
+            raise AccountValidationError("Chỉ có thể cấp lại mật khẩu cho tài khoản Giảng viên.")
+        password = _temporary_password()
+        old_value = user_snapshot(user)
+        user.password_hash = hash_password(password)
+        user.must_change_password = True
+        user.updated_at = now
+        sessions = session.scalars(select(AuthSessionModel).where(AuthSessionModel.user_id == user.id, AuthSessionModel.revoked_at.is_(None))).all()
+        for auth_session in sessions:
+            auth_session.revoked_at = now
+        session.add(_audit(actor=actor, target=user, action="PASSWORD_RESET_BY_ADMIN", old_value=old_value, new_value={"must_change_password": True}, now=now))
+        session.commit()
+        return {"user": user_snapshot(user), "temporary_password": password}

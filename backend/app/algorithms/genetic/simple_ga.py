@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import time
 from dataclasses import dataclass
+from collections.abc import Callable
 
 from backend.app.algorithms.genetic.soft_constraints import (
     SoftConstraintWeights,
@@ -15,6 +16,7 @@ from backend.app.domain.models import (
     TimetableInputData,
 )
 from backend.app.scheduling.feasible_assignments import (
+    FeasibleDomainBuildStopped,
     build_feasible_assignment_domains,
     find_sections_without_feasible_assignments,
 )
@@ -32,6 +34,9 @@ class GeneticAlgorithmConfig:
     tournament_size: int = 3
     target_soft_cost: float | None = None
     soft_weights: SoftConstraintWeights = SoftConstraintWeights()
+    time_limit_seconds: float | None = None
+    progress_callback: Callable[[int, int, "TimetableCandidate"], None] | None = None
+    cancellation_callback: Callable[[], bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -78,7 +83,22 @@ def run_simple_genetic_algorithm(
             diagnostics=tuple(config_errors),
         )
 
-    domains = build_feasible_assignment_domains(input_data)
+    deadline = started_at + config.time_limit_seconds if config.time_limit_seconds is not None else None
+    try:
+        domains = build_feasible_assignment_domains(
+            input_data,
+            should_stop=lambda: (config.cancellation_callback is not None and config.cancellation_callback()) or (deadline is not None and time.perf_counter() >= deadline),
+        )
+    except FeasibleDomainBuildStopped:
+        return GeneticAlgorithmResult(
+            status="STOPPED",
+            best_candidate=None,
+            generation_count=0,
+            seed=config.seed,
+            stop_reason="CANCELLED" if config.cancellation_callback is not None and config.cancellation_callback() else "TIME_LIMIT",
+            execution_time_seconds=time.perf_counter() - started_at,
+            diagnostics=("Run đã dừng trong khi xây dựng miền khả thi.",),
+        )
     sections_without_domain = find_sections_without_feasible_assignments(domains)
     if sections_without_domain:
         return GeneticAlgorithmResult(
@@ -119,6 +139,8 @@ def run_simple_genetic_algorithm(
         if _is_better(population[0], best_candidate):
             best_candidate = population[0]
         history.append(best_candidate.evaluation)
+        if config.progress_callback is not None:
+            config.progress_callback(generation, config.generations, best_candidate)
 
         if _target_reached(best_candidate, config):
             return GeneticAlgorithmResult(
@@ -129,6 +151,29 @@ def run_simple_genetic_algorithm(
                 stop_reason="TARGET_SOFT_COST_REACHED",
                 execution_time_seconds=time.perf_counter() - started_at,
                 diagnostics=(),
+                fitness_history=tuple(history),
+            )
+
+        if config.cancellation_callback is not None and config.cancellation_callback():
+            return GeneticAlgorithmResult(
+                status="STOPPED",
+                best_candidate=best_candidate,
+                generation_count=generation_count,
+                seed=config.seed,
+                stop_reason="CANCELLED",
+                execution_time_seconds=time.perf_counter() - started_at,
+                diagnostics=("Run đã được yêu cầu dừng; kết quả tốt nhất đã được giữ lại.",),
+                fitness_history=tuple(history),
+            )
+        if config.time_limit_seconds is not None and time.perf_counter() - started_at >= config.time_limit_seconds:
+            return GeneticAlgorithmResult(
+                status="STOPPED",
+                best_candidate=best_candidate,
+                generation_count=generation_count,
+                seed=config.seed,
+                stop_reason="TIME_LIMIT",
+                execution_time_seconds=time.perf_counter() - started_at,
+                diagnostics=("Đã đạt giới hạn thời gian; kết quả tốt nhất đã được giữ lại.",),
                 fitness_history=tuple(history),
             )
 
@@ -375,5 +420,7 @@ def _validate_config(
         errors.append("tournament_size phải lớn hơn hoặc bằng 1.")
     if config.target_soft_cost is not None and config.target_soft_cost < 0:
         errors.append("target_soft_cost phải lớn hơn hoặc bằng 0.")
+    if config.time_limit_seconds is not None and config.time_limit_seconds <= 0:
+        errors.append("time_limit_seconds phải lớn hơn 0.")
     errors.extend(config.soft_weights.validate())
     return errors

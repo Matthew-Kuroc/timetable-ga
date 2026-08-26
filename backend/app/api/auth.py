@@ -13,6 +13,7 @@ from backend.app.api.dependencies import (
 from backend.app.core.config import get_settings
 from backend.app.db.models import AppUserModel
 from backend.app.services.auth_service import authenticate, revoke_session
+from backend.app.services.user_service import change_own_password
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -21,6 +22,11 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=80)
     password: str = Field(min_length=1, max_length=256)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=8, max_length=256)
 
 
 @router.post("/login")
@@ -56,6 +62,31 @@ def me(
     return {"user": user_payload(current_user)}
 
 
+@router.post("/change-password")
+def change_password(
+    request: ChangePasswordRequest,
+    response: Response,
+    current_user: Annotated[AppUserModel, Depends(get_current_user)],
+) -> dict[str, Any]:
+    try:
+        change_own_password(
+            user_id=current_user.id,
+            current_password=request.current_password,
+            new_password=request.new_password,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+    settings = get_settings()
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        path="/",
+        secure=settings.auth_cookie_secure,
+        httponly=True,
+        samesite="lax",
+    )
+    return {"message": "Đổi mật khẩu thành công. Vui lòng đăng nhập lại."}
+
+
 @router.post("/logout")
 def logout(
     request: Request,
@@ -82,6 +113,7 @@ def user_payload(user: AppUserModel, *, include_timestamps: bool = False) -> dic
         "active": user.active,
         "system_account": user.system_account,
         "lecturer_code": user.lecturer_code,
+        "must_change_password": bool(user.must_change_password),
     }
     if include_timestamps:
         payload.update(

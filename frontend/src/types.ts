@@ -8,6 +8,7 @@ export interface AuthUser {
   active: boolean;
   system_account?: boolean;
   lecturer_code?: string | null;
+  must_change_password?: boolean;
 }
 
 export interface LoginResponse {
@@ -19,6 +20,13 @@ export interface AdminUser extends AuthUser {
   created_at?: string;
   updated_at?: string;
   last_login_at?: string | null;
+}
+
+export interface LecturerProvisionResult {
+  batch_code?: string | null;
+  created: Array<{ lecturer_code: string; username: string; temporary_password: string }>;
+  skipped: string[];
+  conflicts: Array<{ lecturer_code: string; reason: string }>;
 }
 
 export interface LecturerOption {

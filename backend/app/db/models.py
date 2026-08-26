@@ -16,6 +16,7 @@ class AppUserModel(Base):
     username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     role: Mapped[str] = mapped_column(String(30), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     system_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

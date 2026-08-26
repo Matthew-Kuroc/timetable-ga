@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AdminPortal } from "./features/admin/AdminPortal";
 import { useAuth } from "./features/auth/AuthContext";
 import { LoginPage } from "./features/auth/LoginPage";
+import { PasswordChangePage } from "./features/auth/PasswordChangePage";
 import { LecturerPortal } from "./features/lecturer/LecturerPortal";
 import { TrainingOfficePortal } from "./features/training-office/TrainingOfficePortal";
 import type { UserRole } from "./types";
@@ -50,6 +51,7 @@ export function App() {
   if (auth.status === "anonymous" || !auth.user) return <LoginPage onAuthenticated={() => navigate("/", true)} />;
 
   const user = auth.user;
+  if (user.must_change_password) return <PasswordChangePage username={user.username} />;
   if (path === "/" || path === "/login") return <FullPageState title="Đang mở cổng làm việc" message="Vui lòng chờ..." />;
   if (!knownRoutes.includes(path)) return <FullPageState title="Đang điều hướng" message="Đường dẫn không hợp lệ, hệ thống đang đưa bạn về trang phù hợp." />;
   if (!routesByRole[user.role].includes(path)) return <ForbiddenPage onBack={() => navigate(defaultRoutes[user.role])} />;

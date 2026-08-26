@@ -18,6 +18,8 @@ from backend.app.services.user_service import (
     list_audit_logs,
     list_users,
     update_user,
+    provision_lecturer_accounts,
+    reset_lecturer_password,
 )
 from backend.app.services.runtime_store import list_confirmed_lecturers
 
@@ -42,6 +44,11 @@ class UpdateUserRequest(BaseModel):
     role: UserRole | None = None
     active: bool | None = None
     lecturer_code: str | None = Field(default=None, max_length=50)
+
+
+class ProvisionLecturerRequest(BaseModel):
+    lecturer_codes: list[str] = Field(default_factory=list, max_length=600)
+    all_lecturers: bool = False
 
 
 @router.get("/users")
@@ -103,6 +110,21 @@ def post_user(request: CreateUserRequest, admin: AdminUser) -> dict[str, Any]:
     return {"user": user_payload(user, include_timestamps=True)}
 
 
+@router.post("/lecturers/provision")
+def provision_lecturers(request: ProvisionLecturerRequest, admin: AdminUser) -> dict[str, Any]:
+    if not request.all_lecturers and not request.lecturer_codes:
+        raise HTTPException(status_code=422, detail="Chọn mã giảng viên hoặc bật cấp toàn bộ giảng viên.")
+    try:
+        result = provision_lecturer_accounts(
+            actor=admin,
+            lecturer_codes=request.lecturer_codes,
+            all_lecturers=request.all_lecturers,
+        )
+    except AccountValidationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return result
+
+
 @router.patch("/users/{user_id}")
 def patch_user(
     user_id: int,
@@ -124,6 +146,16 @@ def patch_user(
     except AccountValidationError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return {"user": user_payload(user, include_timestamps=True)}
+
+
+@router.post("/users/{user_id}/reset-password")
+def reset_password(user_id: int, admin: AdminUser) -> dict[str, Any]:
+    try:
+        return reset_lecturer_password(actor=admin, user_id=user_id)
+    except AccountNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except AccountValidationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @router.get("/audit-logs")

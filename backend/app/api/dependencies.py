@@ -45,7 +45,11 @@ def require_roles(*roles: UserRole) -> Callable[..., AppUserModel]:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Bạn không có quyền thực hiện thao tác này.",
             )
+        if current_user.must_change_password:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tài khoản phải đổi mật khẩu trước khi sử dụng chức năng này.",
+            )
         return current_user
 
     return dependency
-

@@ -71,6 +71,7 @@ class GaRunRequest(BaseModel):
     tournament_size: int = Field(default=3, ge=1)
     target_soft_cost: float | None = Field(default=None, ge=0)
     soft_weights: SoftWeightsRequest = Field(default_factory=SoftWeightsRequest)
+    time_limit_seconds: float | None = Field(default=None, gt=0)
 
 
 @router.post("/runs/preview")
@@ -105,6 +106,7 @@ def run_ga_preview(request: GaRunRequest) -> dict[str, object]:
             tournament_size=request.tournament_size,
             target_soft_cost=request.target_soft_cost,
             soft_weights=SoftConstraintWeights(**request.soft_weights.model_dump()),
+            time_limit_seconds=request.time_limit_seconds,
         ),
     )
     if result.best_candidate is None:
@@ -168,6 +170,7 @@ def run_ga_preview(request: GaRunRequest) -> dict[str, object]:
             "tournament_size": request.tournament_size,
             "target_soft_cost": request.target_soft_cost,
             "soft_weights": request.soft_weights.model_dump(),
+            "time_limit_seconds": request.time_limit_seconds,
         },
     }
     expansion = expand_base_assignments_to_occurrences(validation_result.data, result.best_candidate.assignments)

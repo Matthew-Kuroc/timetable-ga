@@ -18,6 +18,7 @@ import type {
   Run,
   UserRole,
   UserWriteInput,
+  LecturerProvisionResult,
 } from "../types";
 
 export class ApiError extends Error {
@@ -125,6 +126,7 @@ export const api = {
   login: (username: string, password: string) => jsonRequest<LoginResponse>("/api/auth/login", "POST", { username, password }, false),
   me: async () => (await request<{ user: AuthUser }>("/api/auth/me", undefined, false)).user,
   logout: () => request<{ message: string }>("/api/auth/logout", { method: "POST" }, false),
+  changePassword: (body: { current_password: string; new_password: string }) => jsonRequest<{ message: string }>("/api/auth/change-password", "POST", body, false),
 
   adminUsers: (params: { q?: string; role?: UserRole; active?: boolean; limit?: number; offset?: number }) =>
     request<{ users: AdminUser[]; total: number }>(`/api/admin/users${query(params)}`),
@@ -135,6 +137,10 @@ export const api = {
     jsonRequest<{ user: AdminUser }>(`/api/admin/users/${userId}`, "PATCH", body),
   auditLogs: (params: { limit?: number; offset?: number }) =>
     request<{ audit_logs: AuditLog[]; total: number }>(`/api/admin/audit-logs${query(params)}`),
+  provisionLecturers: (body: { lecturer_codes?: string[]; all_lecturers?: boolean }) =>
+    jsonRequest<LecturerProvisionResult>("/api/admin/lecturers/provision", "POST", body),
+  resetLecturerPassword: (userId: number) =>
+    request<{ user: AdminUser; temporary_password: string }>(`/api/admin/users/${userId}/reset-password`, { method: "POST" }),
 
   lecturerTimetable: (week: number, selected_date?: string) => request<LecturerTimetable>(`/api/lecturer/timetable${query({ week, selected_date })}`),
   lecturerChangeRequests: () => request<ChangeRequestListResponse>("/api/lecturer/change-requests"),

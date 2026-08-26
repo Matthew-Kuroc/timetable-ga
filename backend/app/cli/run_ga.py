@@ -27,6 +27,7 @@ def main() -> int:
     parser.add_argument("--mutation-rate", type=float, default=0.1)
     parser.add_argument("--elite-count", type=int, default=2)
     parser.add_argument("--tournament-size", type=int, default=3)
+    parser.add_argument("--time-limit-seconds", type=float, default=None)
     parser.add_argument(
         "--show-occurrences",
         action="store_true",
@@ -54,7 +55,8 @@ def main() -> int:
             crossover_rate=args.crossover_rate,
             mutation_rate=args.mutation_rate,
             elite_count=args.elite_count,
-            tournament_size=args.tournament_size,
+        tournament_size=args.tournament_size,
+        time_limit_seconds=args.time_limit_seconds,
         ),
     )
 

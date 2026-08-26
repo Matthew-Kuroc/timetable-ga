@@ -14,7 +14,7 @@ from backend.app.db.models import AccountAuditModel, AuthSessionModel
 from backend.app.db.session import get_session_local
 from backend.app.domain.auth import UserRole
 from backend.app.main import create_app
-from backend.tests.auth_helpers import TEST_PASSWORD, create_test_user
+from backend.tests.auth_helpers import TEST_PASSWORD, authenticated_client, create_test_user
 
 
 def test_password_hash_uses_pbkdf2_with_individual_salts() -> None:
@@ -97,3 +97,24 @@ def test_failed_and_inactive_logins_are_safe_and_unauthenticated_in_audit() -> N
         ).all()
         assert len(failures) == 2
         assert all(item.actor_user_id is None and item.actor_username is None for item in failures)
+
+
+def test_temporary_password_must_be_changed_before_normal_portal() -> None:
+    create_test_user(UserRole.ADMIN, username="admin_temp")
+    admin_client = authenticated_client(UserRole.ADMIN, username="admin_temp")
+    created = admin_client.post(
+        "/api/admin/users",
+        json={"username": "gv.temp", "display_name": "Giang vien tam", "password": TEST_PASSWORD, "role": "LECTURER", "lecturer_code": "GV001"},
+    )
+    assert created.status_code == 201
+    lecturer = TestClient(create_app())
+    login = lecturer.post("/api/auth/login", json={"username": "gv.temp", "password": TEST_PASSWORD})
+    assert login.status_code == 200
+    assert login.json()["user"]["must_change_password"] is True
+    assert lecturer.get("/api/lecturer/timetable", params={"week": 1}).status_code == 403
+    changed = lecturer.post("/api/auth/change-password", json={"current_password": TEST_PASSWORD, "new_password": "MatKhauMoi!123"})
+    assert changed.status_code == 200
+    assert lecturer.get("/api/auth/me").status_code == 401
+    relogin = lecturer.post("/api/auth/login", json={"username": "gv.temp", "password": "MatKhauMoi!123"})
+    assert relogin.status_code == 200
+    assert relogin.json()["user"]["must_change_password"] is False

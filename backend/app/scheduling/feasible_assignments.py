@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from backend.app.domain.models import (
     FeasibleAssignmentDomain,
     ScheduleAssignment,
@@ -8,15 +10,24 @@ from backend.app.domain.models import (
 from backend.app.scheduling.hard_constraints import check_hard_constraints
 
 
+class FeasibleDomainBuildStopped(Exception):
+    """Raised when a caller stops an expensive domain-build phase."""
+
+
 def build_feasible_assignment_domains(
     input_data: TimetableInputData,
+    should_stop: Callable[[], bool] | None = None,
 ) -> tuple[FeasibleAssignmentDomain, ...]:
     domains: list[FeasibleAssignmentDomain] = []
+    checks = 0
     for section in input_data.course_sections.values():
         for meeting_number in range(1, section.weekly_sessions + 1):
             feasible_assignments: list[ScheduleAssignment] = []
             for slot in input_data.time_slots.values():
                 for room in input_data.rooms.values():
+                    checks += 1
+                    if should_stop is not None and checks % 256 == 0 and should_stop():
+                        raise FeasibleDomainBuildStopped()
                     assignment = ScheduleAssignment(
                         section_code=section.section_code,
                         room_code=room.room_code,
